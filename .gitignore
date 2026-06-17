@@ -1,0 +1,29 @@
+# --- Secrets ---
+.env
+*.pem
+*.key
+
+# --- Python bytecode ---
+__pycache__/
+*.py[cod]
+*.pyo
+
+# --- Virtual environment ---
+venv/
+.venv/
+env/
+
+# --- Django ---
+*.log
+media/
+staticfiles/
+db.sqlite3
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
