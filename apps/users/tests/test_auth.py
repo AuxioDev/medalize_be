@@ -128,7 +128,7 @@ class MeViewTests(AuthTestCase):
     def test_me_without_token_returns_401(self):
         res = self.client.get(ME_URL)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(res.data['code'], 'token_invalid')
+        self.assertEqual(res.data['code'], 'not_authenticated')
 
     def test_me_with_expired_token_returns_401_token_expired(self):
         user = User.objects.get(email='patient@test.com')
@@ -183,6 +183,97 @@ class LogoutTests(AuthTestCase):
         # Confirm the refresh token is now blacklisted
         res2 = self.client.post(REFRESH_URL, {'refresh': self.refresh_token}, format='json')
         self.assertEqual(res2.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class RegisterValidationTests(AuthTestCase):
+    def test_register_weak_password_returns_400_validation_error(self):
+        res = self.client.post(REGISTER_URL, patient_payload(password='short', password_confirm='short'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'validation_error')
+        self.assertIn('password', res.data['errors'])
+
+    def test_register_invalid_email_returns_400_validation_error(self):
+        res = self.client.post(REGISTER_URL, patient_payload(email='not-an-email'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'validation_error')
+        self.assertIn('email', res.data['errors'])
+
+    def test_register_missing_required_fields_returns_400_validation_error(self):
+        res = self.client.post(REGISTER_URL, {}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'validation_error')
+
+    def test_register_duplicate_email_returns_400_validation_error(self):
+        self.client.post(REGISTER_URL, patient_payload(), format='json')
+        cache.clear()
+        res = self.client.post(REGISTER_URL, patient_payload(), format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'validation_error')
+        self.assertIn('email', res.data['errors'])
+
+    def test_register_password_mismatch_returns_400_validation_error(self):
+        res = self.client.post(REGISTER_URL, patient_payload(password_confirm='Different1'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'validation_error')
+
+
+class LoginErrorTests(AuthTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.post(REGISTER_URL, patient_payload(), format='json')
+        cache.clear()
+
+    def test_login_nonexistent_email_returns_401_invalid_credentials(self):
+        res = self.client.post(LOGIN_URL, {'email': 'nobody@test.com', 'password': 'Pass1234'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(res.data['code'], 'invalid_credentials')
+        self.assertEqual(res.data['message'], 'Invalid email or password.')
+
+    def test_login_wrong_password_message_does_not_leak_account_existence(self):
+        res = self.client.post(LOGIN_URL, {'email': 'patient@test.com', 'password': 'WrongPass1'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(res.data['message'], 'Invalid email or password.')
+
+    def test_login_missing_fields_returns_400_validation_error(self):
+        res = self.client.post(LOGIN_URL, {}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'validation_error')
+
+    def test_login_inactive_account_returns_401_invalid_credentials(self):
+        user = User.objects.get(email='patient@test.com')
+        user.is_active = False
+        user.save()
+        res = self.client.post(LOGIN_URL, {'email': 'patient@test.com', 'password': 'Pass1234'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(res.data['code'], 'invalid_credentials')
+
+
+class LogoutErrorTests(AuthTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.post(REGISTER_URL, patient_payload(), format='json')
+        cache.clear()
+        res = self.client.post(LOGIN_URL, {'email': 'patient@test.com', 'password': 'Pass1234'}, format='json')
+        cache.clear()
+        self.access_token = res.data['access']
+        self.refresh_token = res.data['refresh']
+
+    def test_logout_without_auth_returns_401(self):
+        res = self.client.post(LOGOUT_URL, {'refresh': self.refresh_token}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(res.data['code'], 'not_authenticated')
+
+    def test_logout_missing_refresh_field_returns_400(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        res = self.client.post(LOGOUT_URL, {}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'token_invalid')
+
+    def test_logout_invalid_refresh_token_returns_400(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        res = self.client.post(LOGOUT_URL, {'refresh': 'not-a-real-token'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'token_invalid')
 
 
 class RolePermissionTests(AuthTestCase):

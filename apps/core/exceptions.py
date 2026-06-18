@@ -1,5 +1,12 @@
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated, PermissionDenied, Throttled
+from rest_framework.exceptions import (
+    AuthenticationFailed,
+    NotAuthenticated,
+    NotFound,
+    PermissionDenied,
+    Throttled,
+    ValidationError,
+)
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 from rest_framework_simplejwt.exceptions import InvalidToken
@@ -43,7 +50,7 @@ def custom_exception_handler(exc, context):
         detail = str(exc.detail).lower()
         if 'no active account' in detail or 'invalid' in detail or 'incorrect' in detail:
             return Response(
-                {'code': 'invalid_credentials', 'message': str(exc.detail)},
+                {'code': 'invalid_credentials', 'message': 'Invalid email or password.'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
         return Response(
@@ -53,7 +60,7 @@ def custom_exception_handler(exc, context):
 
     if isinstance(exc, NotAuthenticated):
         return Response(
-            {'code': 'token_invalid', 'message': 'Authentication credentials were not provided.'},
+            {'code': 'not_authenticated', 'message': 'Authentication credentials were not provided.'},
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
@@ -65,6 +72,18 @@ def custom_exception_handler(exc, context):
         return Response(
             {'code': 'permission_denied', 'role': role},
             status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if isinstance(exc, NotFound):
+        return Response(
+            {'code': 'not_found', 'message': str(exc.detail)},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if isinstance(exc, ValidationError):
+        return Response(
+            {'code': 'validation_error', 'errors': exc.detail},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     return response
