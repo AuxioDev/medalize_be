@@ -98,6 +98,12 @@ class MeView(APIView):
         serializer = MeSerializer(request.user)
         return Response(serializer.data)
 
+    def patch(self, request):
+        serializer = MeSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(MeSerializer(request.user).data)
+
 
 class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]

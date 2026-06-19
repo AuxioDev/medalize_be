@@ -38,6 +38,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, max_length=255)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -54,8 +55,34 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class DoctorProfile(models.Model):
+    SPECIALIZATION_CHOICES = [
+        ('general_practice', 'General Practice'),
+        ('cardiology', 'Cardiology'),
+        ('dermatology', 'Dermatology'),
+        ('neurology', 'Neurology'),
+        ('orthopedics', 'Orthopedics'),
+        ('pediatrics', 'Pediatrics'),
+        ('psychiatry', 'Psychiatry'),
+        ('gynecology', 'Gynecology'),
+        ('urology', 'Urology'),
+        ('ophthalmology', 'Ophthalmology'),
+        ('ent', 'ENT (Ear, Nose & Throat)'),
+        ('oncology', 'Oncology'),
+        ('endocrinology', 'Endocrinology'),
+        ('gastroenterology', 'Gastroenterology'),
+        ('pulmonology', 'Pulmonology'),
+        ('radiology', 'Radiology'),
+        ('anesthesiology', 'Anesthesiology'),
+        ('emergency_medicine', 'Emergency Medicine'),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='doctor_profile')
-    specialization = models.CharField(max_length=200, blank=True)
+    specialization = models.CharField(
+        max_length=50,
+        choices=SPECIALIZATION_CHOICES,
+        default='general_practice',
+        blank=True,
+    )
     license_number = models.CharField(max_length=100, blank=True)
     bio = models.TextField(blank=True)
     diploma_file = models.FileField(upload_to='diplomas/', null=True, blank=True)

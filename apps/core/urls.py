@@ -1,4 +1,7 @@
 from django.urls import path
 
-# Placeholder — other feature apps attach their routes here
-urlpatterns = []
+from . import views
+
+urlpatterns = [
+    path('doctors/specializations/', views.specializations_list, name='specializations-list'),
+]

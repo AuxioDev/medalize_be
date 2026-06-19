@@ -13,6 +13,7 @@ LOGIN_URL = '/api/auth/login/'
 REFRESH_URL = '/api/auth/token/refresh/'
 LOGOUT_URL = '/api/auth/logout/'
 ME_URL = '/api/auth/me/'
+SPECIALIZATIONS_URL = '/api/doctors/specializations/'
 
 
 def patient_payload(**kwargs):
@@ -297,3 +298,77 @@ class RolePermissionTests(AuthTestCase):
         request = MagicMock()
         request.user = user
         self.assertTrue(IsPatient().has_permission(request, None))
+
+
+class PhoneFieldTests(AuthTestCase):
+    def test_register_with_phone_saves_phone(self):
+        res = self.client.post(REGISTER_URL, patient_payload(phone='+994501234567'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email='patient@test.com')
+        self.assertEqual(user.phone, '+994501234567')
+
+    def test_register_without_phone_defaults_to_empty(self):
+        res = self.client.post(REGISTER_URL, patient_payload(), format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email='patient@test.com')
+        self.assertEqual(user.phone, '')
+
+    def test_me_returns_phone_field(self):
+        self.client.post(REGISTER_URL, patient_payload(phone='+994501234567'), format='json')
+        cache.clear()
+        res = self.client.post(LOGIN_URL, {'email': 'patient@test.com', 'password': 'Pass1234'}, format='json')
+        cache.clear()
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {res.data["access"]}')
+        me = self.client.get(ME_URL)
+        self.assertIn('phone', me.data)
+        self.assertEqual(me.data['phone'], '+994501234567')
+
+    def test_patch_me_updates_phone(self):
+        self.client.post(REGISTER_URL, patient_payload(), format='json')
+        cache.clear()
+        res = self.client.post(LOGIN_URL, {'email': 'patient@test.com', 'password': 'Pass1234'}, format='json')
+        cache.clear()
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {res.data["access"]}')
+        patch_res = self.client.patch(ME_URL, {'phone': '+994701234567'}, format='json')
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_res.data['phone'], '+994701234567')
+        user = User.objects.get(email='patient@test.com')
+        self.assertEqual(user.phone, '+994701234567')
+
+    def test_patch_me_cannot_change_email_or_role(self):
+        self.client.post(REGISTER_URL, patient_payload(), format='json')
+        cache.clear()
+        res = self.client.post(LOGIN_URL, {'email': 'patient@test.com', 'password': 'Pass1234'}, format='json')
+        cache.clear()
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {res.data["access"]}')
+        patch_res = self.client.patch(ME_URL, {'email': 'hacked@evil.com', 'role': 'doctor'}, format='json')
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        # read_only_fields means these are silently ignored, not rejected
+        self.assertEqual(patch_res.data['email'], 'patient@test.com')
+        self.assertEqual(patch_res.data['role'], 'patient')
+
+    def test_patch_me_without_token_returns_401(self):
+        res = self.client.patch(ME_URL, {'phone': '+994701234567'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class SpecializationsTests(AuthTestCase):
+    def test_specializations_returns_200_no_auth_required(self):
+        res = self.client.get(SPECIALIZATIONS_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_specializations_returns_list_of_value_label_pairs(self):
+        res = self.client.get(SPECIALIZATIONS_URL)
+        self.assertIsInstance(res.data, list)
+        self.assertGreater(len(res.data), 0)
+        first = res.data[0]
+        self.assertIn('value', first)
+        self.assertIn('label', first)
+
+    def test_specializations_contains_expected_entries(self):
+        res = self.client.get(SPECIALIZATIONS_URL)
+        values = [item['value'] for item in res.data]
+        self.assertIn('general_practice', values)
+        self.assertIn('cardiology', values)
+        self.assertIn('gastroenterology', values)
+        self.assertEqual(len(values), 18)

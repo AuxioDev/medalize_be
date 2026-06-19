@@ -59,6 +59,7 @@ class RegisterSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=User.ROLE_CHOICES)
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -90,9 +91,17 @@ class PatientProfileSerializer(serializers.ModelSerializer):
 
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
+    specialization = serializers.ChoiceField(
+        choices=DoctorProfile.SPECIALIZATION_CHOICES,
+        allow_blank=False,
+    )
+    specialization_display = serializers.CharField(
+        source='get_specialization_display', read_only=True
+    )
+
     class Meta:
         model = DoctorProfile
-        fields = ['specialization', 'bio', 'slot_duration_min']
+        fields = ['specialization', 'specialization_display', 'bio', 'slot_duration_min']
 
 
 class MeSerializer(serializers.ModelSerializer):
@@ -100,7 +109,8 @@ class MeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['user_id', 'email', 'role', 'first_name', 'last_name']
+        fields = ['user_id', 'email', 'role', 'first_name', 'last_name', 'phone']
+        read_only_fields = ['user_id', 'email', 'role']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
