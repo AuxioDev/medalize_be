@@ -6,14 +6,10 @@ DEFAULT_REFRESH_LIFETIME = timedelta(days=1)
 
 
 class MedalizeRefreshToken(RefreshToken):
-    """
-    Custom refresh token that adjusts its lifetime based on the remember_me flag
-    embedded in the payload at creation time.
-    """
-
     @classmethod
     def for_user(cls, user, remember_me=False):
         token = super().for_user(user)
+        token['role'] = user.role
         if remember_me:
             token['remember_me'] = True
             token.set_exp(lifetime=REMEMBER_ME_LIFETIME)

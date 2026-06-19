@@ -1,9 +1,12 @@
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.conf import settings
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
+from django.db import transaction
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -12,6 +15,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from .models import PasswordResetOTP
 from .serializers import (
     CustomTokenObtainPairSerializer,
     MeSerializer,
@@ -23,6 +27,8 @@ from .serializers import (
 from .throttles import LoginRateThrottle, PasswordResetRateThrottle, RegisterRateThrottle
 
 User = get_user_model()
+
+_OTP_LIFETIME = timedelta(minutes=10)
 
 
 class RegisterView(APIView):
@@ -56,9 +62,9 @@ class CustomTokenRefreshView(TokenRefreshView):
             from rest_framework_simplejwt.tokens import AccessToken
             try:
                 decoded = AccessToken(response.data['access'])
-                user = User.objects.get(id=decoded['user_id'])
-                response.data['role'] = user.role
-                response.data['user_id'] = str(user.id)
+                # role was encoded as a claim at token creation — no DB query needed
+                response.data['role'] = decoded.get('role', '')
+                response.data['user_id'] = str(decoded['user_id'])
             except Exception:
                 pass
         return response
@@ -101,6 +107,15 @@ class PasswordChangeView(APIView):
         serializer.is_valid(raise_exception=True)
         request.user.set_password(serializer.validated_data['new_password'])
         request.user.save()
+
+        # Blacklist the provided refresh token so all existing sessions are revoked
+        refresh_token = request.data.get('refresh')
+        if refresh_token:
+            try:
+                RefreshToken(refresh_token).blacklist()
+            except TokenError:
+                pass
+
         return Response({'message': 'Password changed successfully.'})
 
 
@@ -115,14 +130,22 @@ class PasswordResetRequestView(APIView):
 
         try:
             user = User.objects.get(email=email)
-            generator = PasswordResetTokenGenerator()
-            token = generator.make_token(user)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-            reset_url = f'{frontend_url}/reset-password/{uid}/{token}/'
+            # Invalidate any previous unused OTPs for this user
+            user.password_reset_otps.filter(used=False).update(used=True)
+
+            otp_code = f'{secrets.randbelow(1_000_000):06d}'
+            PasswordResetOTP.objects.create(
+                user=user,
+                code_hash=make_password(otp_code),
+                expires_at=timezone.now() + _OTP_LIFETIME,
+            )
             send_mail(
-                subject='Password Reset Request',
-                message=f'Click the link to reset your password: {reset_url}',
+                subject='Your Medalize Password Reset Code',
+                message=(
+                    f'Your password reset code is: {otp_code}\n\n'
+                    'This code expires in 10 minutes. '
+                    'If you did not request this, you can safely ignore this email.'
+                ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
                 fail_silently=True,
@@ -130,16 +153,38 @@ class PasswordResetRequestView(APIView):
         except User.DoesNotExist:
             pass
 
-        return Response({'message': 'If that email exists, a reset link has been sent.'})
+        return Response({'message': 'If that email exists, a reset code has been sent.'})
 
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetRateThrottle]
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
         user = serializer.validated_data['user']
-        user.set_password(serializer.validated_data['new_password'])
-        user.save()
+        otp = serializer.validated_data['otp']
+        new_password = serializer.validated_data['new_password']
+
+        with transaction.atomic():
+            # Re-fetch with a row lock to prevent two concurrent requests from
+            # both consuming the same OTP (TOCTOU race condition).
+            try:
+                locked_otp = (
+                    PasswordResetOTP.objects
+                    .select_for_update()
+                    .get(pk=otp.pk, used=False, expires_at__gt=timezone.now())
+                )
+            except PasswordResetOTP.DoesNotExist:
+                return Response(
+                    {'code': 'validation_error', 'errors': {'code': ['Invalid or expired code.']}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            locked_otp.used = True
+            locked_otp.save(update_fields=['used'])
+            user.set_password(new_password)
+            user.save()
+
         return Response({'message': 'Password reset successful.'})

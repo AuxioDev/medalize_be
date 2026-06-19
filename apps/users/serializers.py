@@ -1,31 +1,37 @@
 import re
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
+from django.contrib.auth.hashers import check_password, make_password
+from django.utils import timezone
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenObtainSerializer
+from rest_framework_simplejwt.settings import api_settings
+from django.contrib.auth.models import update_last_login
 
-from .models import DoctorProfile, PatientProfile
+from .models import DoctorProfile, PatientProfile, PasswordResetOTP
 from .tokens import MedalizeRefreshToken
 
 User = get_user_model()
 
 _PASSWORD_RE = re.compile(r'^(?=.*[A-Za-z])(?=.*\d).{8,}$')
+# Precomputed dummy hash for constant-time OTP verification (prevents timing attacks)
+_DUMMY_OTP_HASH = make_password('000000')
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    token_class = MedalizeRefreshToken
     remember_me = serializers.BooleanField(default=False, write_only=True)
 
     def validate(self, attrs):
         remember_me = attrs.pop('remember_me', False)
-        data = super().validate(attrs)
+        # Authenticate via grandparent only — skips TokenObtainPairSerializer.get_token,
+        # so exactly one outstanding token is created below instead of two.
+        data = super(TokenObtainPairSerializer, self).validate(attrs)
 
-        # Recreate refresh token with correct lifetime based on remember_me
         refresh = MedalizeRefreshToken.for_user(self.user, remember_me=remember_me)
         data['refresh'] = str(refresh)
         data['access'] = str(refresh.access_token)
+
+        if api_settings.UPDATE_LAST_LOGIN:
+            update_last_login(None, self.user)
 
         data['role'] = self.user.role
         data['user_id'] = str(self.user.id)
@@ -145,8 +151,8 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    uid = serializers.CharField()
-    token = serializers.CharField()
+    email = serializers.EmailField(max_length=255)
+    code = serializers.CharField(max_length=6, min_length=6)
     new_password = serializers.CharField(write_only=True, max_length=128)
 
     def validate_new_password(self, value):
@@ -157,18 +163,22 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        from django.utils.http import urlsafe_base64_decode
-        from django.utils.encoding import force_str
-
         try:
-            uid = force_str(urlsafe_base64_decode(attrs['uid']))
-            user = User.objects.get(pk=uid)
-        except (User.DoesNotExist, ValueError, TypeError):
-            raise serializers.ValidationError({'uid': 'Invalid reset link.'})
+            user = User.objects.get(email=attrs['email'])
+        except User.DoesNotExist:
+            raise serializers.ValidationError({'code': 'Invalid or expired code.'})
 
-        generator = PasswordResetTokenGenerator()
-        if not generator.check_token(user, attrs['token']):
-            raise serializers.ValidationError({'token': 'Invalid or expired token.'})
+        otp = (
+            PasswordResetOTP.objects
+            .filter(user=user, used=False, expires_at__gt=timezone.now())
+            .first()
+        )
+        # Always call check_password (even when otp is None) so response time
+        # is constant regardless of whether an OTP exists — prevents timing attacks.
+        code_hash = otp.code_hash if otp is not None else _DUMMY_OTP_HASH
+        if otp is None or not check_password(attrs['code'], code_hash):
+            raise serializers.ValidationError({'code': 'Invalid or expired code.'})
 
         attrs['user'] = user
+        attrs['otp'] = otp
         return attrs

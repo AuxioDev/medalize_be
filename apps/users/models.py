@@ -78,6 +78,17 @@ class PatientProfile(models.Model):
         return f'Patient: {self.user.email}'
 
 
+class PasswordResetOTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_otps')
+    code_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 @receiver(post_save, sender=User)
 def create_role_profile(sender, instance, created, **kwargs):
     if not created:
