@@ -3,3 +3,4 @@ djangorestframework
 djangorestframework-simplejwt
 django-environ
 drf-spectacular
+django-cors-headers
