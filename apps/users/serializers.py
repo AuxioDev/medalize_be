@@ -13,8 +13,15 @@ from .tokens import MedalizeRefreshToken
 User = get_user_model()
 
 _PASSWORD_RE = re.compile(r'^(?=.*[A-Za-z])(?=.*\d).{8,}$')
+_PHONE_RE = re.compile(r'^\+?[0-9()\-\s]{7,20}$')
 # Precomputed dummy hash for constant-time OTP verification (prevents timing attacks)
 _DUMMY_OTP_HASH = make_password('000000')
+
+
+def _validate_phone_format(value):
+    if value and not _PHONE_RE.match(value):
+        raise serializers.ValidationError('Enter a valid phone number (7–20 digits, optional + prefix).')
+    return value
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -66,6 +73,9 @@ class RegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError('A user with this email already exists.')
         return value
 
+    def validate_phone(self, value):
+        return _validate_phone_format(value)
+
     def validate_password(self, value):
         if not _PASSWORD_RE.match(value):
             raise serializers.ValidationError(
@@ -111,6 +121,9 @@ class MeSerializer(serializers.ModelSerializer):
         model = User
         fields = ['user_id', 'email', 'role', 'first_name', 'last_name', 'phone']
         read_only_fields = ['user_id', 'email', 'role']
+
+    def validate_phone(self, value):
+        return _validate_phone_format(value)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

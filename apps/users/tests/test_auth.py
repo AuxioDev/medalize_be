@@ -351,6 +351,27 @@ class PhoneFieldTests(AuthTestCase):
         res = self.client.patch(ME_URL, {'phone': '+994701234567'}, format='json')
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_register_with_invalid_phone_returns_400(self):
+        res = self.client.post(REGISTER_URL, patient_payload(phone='<script>xss</script>'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data['code'], 'validation_error')
+        self.assertIn('phone', res.data['errors'])
+
+    def test_register_with_short_phone_returns_400(self):
+        res = self.client.post(REGISTER_URL, patient_payload(phone='+123'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone', res.data['errors'])
+
+    def test_patch_me_with_invalid_phone_returns_400(self):
+        self.client.post(REGISTER_URL, patient_payload(), format='json')
+        cache.clear()
+        res = self.client.post(LOGIN_URL, {'email': 'patient@test.com', 'password': 'Pass1234'}, format='json')
+        cache.clear()
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {res.data["access"]}')
+        res = self.client.patch(ME_URL, {'phone': 'abc-garbage'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone', res.data['errors'])
+
 
 class SpecializationsTests(AuthTestCase):
     def test_specializations_returns_200_no_auth_required(self):
