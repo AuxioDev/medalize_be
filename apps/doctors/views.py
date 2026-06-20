@@ -1,23 +1,14 @@
 import datetime
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-
-def _parse_date_param(value, name):
-    """Parse a YYYY-MM-DD query param; raise 400 ValidationError on bad format."""
-    if not value:
-        return None
-    try:
-        datetime.date.fromisoformat(value)
-        return value
-    except (ValueError, TypeError):
-        raise ValidationError({name: 'Enter a valid date in YYYY-MM-DD format.'})
-
-from apps.users.permissions import IsDoctor
+from apps.users.permissions import IsDoctor, IsDoctorVerified
 
 from .models import BlockedPeriod, Workplace, WorkingHours
 from .serializers import (
@@ -33,6 +24,16 @@ _DEFAULT_START = datetime.time(9, 0)
 _DEFAULT_END = datetime.time(17, 0)
 
 
+def _parse_date_param(value, name):
+    if not value:
+        return None
+    try:
+        datetime.date.fromisoformat(value)
+        return value
+    except (ValueError, TypeError):
+        raise ValidationError({name: 'Enter a valid date in YYYY-MM-DD format.'})
+
+
 def _get_workplace(pk, doctor):
     try:
         return Workplace.objects.get(pk=pk, doctor=doctor)
@@ -41,7 +42,6 @@ def _get_workplace(pk, doctor):
 
 
 def _full_week_hours(workplace):
-    """Return 7 dicts (Mon–Sun), synthesising defaults for days with no DB row."""
     existing = {h.weekday: h for h in workplace.working_hours.all()}
     result = []
     for day in range(7):
@@ -68,7 +68,7 @@ def _full_week_hours(workplace):
 
 
 class WorkplaceListCreateView(APIView):
-    permission_classes = [IsDoctor]
+    permission_classes = [IsDoctorVerified]
 
     def get(self, request):
         workplaces = (
@@ -86,7 +86,7 @@ class WorkplaceListCreateView(APIView):
 
 
 class WorkplaceDetailView(APIView):
-    permission_classes = [IsDoctor]
+    permission_classes = [IsDoctorVerified]
 
     def patch(self, request, pk):
         workplace = _get_workplace(pk, request.user)
@@ -97,22 +97,25 @@ class WorkplaceDetailView(APIView):
 
     def delete(self, request, pk):
         workplace = _get_workplace(pk, request.user)
-        # TODO: check for future confirmed appointments when apps.appointments is implemented:
-        # from apps.appointments.models import Appointment
-        # from django.utils import timezone
-        # if Appointment.objects.filter(
-        #     workplace=workplace, starts_at__gt=timezone.now(), status='confirmed'
-        # ).exists():
-        #     return Response(
-        #         {'code': 'conflict', 'message': 'Workplace has upcoming confirmed appointments.'},
-        #         status=status.HTTP_409_CONFLICT,
-        #     )
+        try:
+            from apps.appointments.models import Appointment
+            if Appointment.objects.filter(
+                workplace=workplace,
+                starts_at__gt=timezone.now(),
+                status__in=[Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED],
+            ).exists():
+                return Response(
+                    {'code': 'conflict', 'message': 'Workplace has upcoming confirmed appointments.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+        except Exception:
+            pass
         workplace.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class WorkplaceSetPrimaryView(APIView):
-    permission_classes = [IsDoctor]
+    permission_classes = [IsDoctorVerified]
 
     def patch(self, request, pk):
         workplace = _get_workplace(pk, request.user)
@@ -124,7 +127,7 @@ class WorkplaceSetPrimaryView(APIView):
 
 
 class WorkingHoursView(APIView):
-    permission_classes = [IsDoctor]
+    permission_classes = [IsDoctorVerified]
 
     def get(self, request, pk):
         workplace = _get_workplace(pk, request.user)
@@ -164,7 +167,7 @@ class WorkingHoursView(APIView):
 
 
 class WorkingHoursDayView(APIView):
-    permission_classes = [IsDoctor]
+    permission_classes = [IsDoctorVerified]
 
     def patch(self, request, pk, weekday):
         if weekday not in range(7):
@@ -190,7 +193,7 @@ class WorkingHoursDayView(APIView):
 
 
 class BlockedPeriodListCreateView(APIView):
-    permission_classes = [IsDoctor]
+    permission_classes = [IsDoctorVerified]
 
     def get(self, request):
         qs = BlockedPeriod.objects.filter(doctor=request.user)
@@ -208,12 +211,21 @@ class BlockedPeriodListCreateView(APIView):
             context={'doctor': request.user},
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save(doctor=request.user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        notify = serializer.validated_data.pop('notify_patients', False)
+        period = serializer.save(doctor=request.user)
+
+        if notify:
+            try:
+                from apps.notifications.tasks import notify_blocked_period_patients
+                notify_blocked_period_patients.delay(str(period.id))
+            except Exception:
+                pass
+
+        return Response(BlockedPeriodSerializer(period).data, status=status.HTTP_201_CREATED)
 
 
 class BlockedPeriodDetailView(APIView):
-    permission_classes = [IsDoctor]
+    permission_classes = [IsDoctorVerified]
 
     def _get_period(self, pk, doctor):
         try:
@@ -230,6 +242,7 @@ class BlockedPeriodDetailView(APIView):
             context={'doctor': request.user},
         )
         serializer.is_valid(raise_exception=True)
+        serializer.validated_data.pop('notify_patients', None)
         serializer.save()
         return Response(serializer.data)
 
@@ -237,3 +250,23 @@ class BlockedPeriodDetailView(APIView):
         period = self._get_period(pk, request.user)
         period.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DiplomaUploadView(APIView):
+    permission_classes = [IsDoctor]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get('diploma')
+        if not file:
+            raise ValidationError({'diploma': 'No file provided.'})
+        if file.size > 10 * 1024 * 1024:
+            raise ValidationError({'diploma': 'File size must not exceed 10 MB.'})
+        allowed = ['image/jpeg', 'image/png', 'application/pdf']
+        if file.content_type not in allowed:
+            raise ValidationError({'diploma': 'Only JPEG, PNG, or PDF files are allowed.'})
+
+        profile = request.user.doctor_profile
+        profile.diploma_file = file
+        profile.save(update_fields=['diploma_file'])
+        return Response({'message': 'Diploma uploaded successfully.'})

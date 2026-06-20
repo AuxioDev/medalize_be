@@ -52,9 +52,11 @@ class WorkingHoursPatchSerializer(serializers.Serializer):
 
 
 class BlockedPeriodSerializer(serializers.ModelSerializer):
+    notify_patients = serializers.BooleanField(default=False, write_only=True)
+
     class Meta:
         model = BlockedPeriod
-        fields = ['id', 'workplace', 'starts_at', 'ends_at', 'reason']
+        fields = ['id', 'workplace', 'starts_at', 'ends_at', 'reason', 'notify_patients']
         read_only_fields = ['id']
 
     def __init__(self, *args, **kwargs):

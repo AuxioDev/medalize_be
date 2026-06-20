@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.cache import cache
 from django.db import DatabaseError, connection
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -21,6 +22,16 @@ def health_check(request):
         checks['db'] = 'ok'
     except (DatabaseError, Exception):
         checks['db'] = 'error'
+        degraded = True
+
+    try:
+        cache.set('_health', '1', timeout=5)
+        val = cache.get('_health')
+        checks['redis'] = 'ok' if val == '1' else 'error'
+        if val != '1':
+            degraded = True
+    except Exception:
+        checks['redis'] = 'error'
         degraded = True
 
     return Response(

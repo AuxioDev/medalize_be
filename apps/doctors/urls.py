@@ -10,4 +10,5 @@ urlpatterns = [
     path('workplaces/<uuid:pk>/hours/<int:weekday>/', views.WorkingHoursDayView.as_view(), name='working-hours-day'),
     path('blocked-periods/', views.BlockedPeriodListCreateView.as_view(), name='blocked-period-list-create'),
     path('blocked-periods/<uuid:pk>/', views.BlockedPeriodDetailView.as_view(), name='blocked-period-detail'),
+    path('verify/diploma/', views.DiplomaUploadView.as_view(), name='diploma-upload'),
 ]

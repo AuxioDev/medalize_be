@@ -1,3 +1,18 @@
 from django.urls import path
 
-urlpatterns = []
+from . import views
+
+urlpatterns = [
+    # Public doctor endpoints
+    path('doctors/', views.DoctorListView.as_view(), name='doctor-list'),
+    path('doctors/<uuid:pk>/', views.DoctorDetailView.as_view(), name='doctor-detail'),
+    path('doctors/<uuid:pk>/slots/', views.SlotListView.as_view(), name='doctor-slots'),
+    # Patient appointment endpoints
+    path('appointments/', views.PatientAppointmentListCreateView.as_view(), name='appointment-list-create'),
+    path('appointments/<uuid:pk>/', views.PatientAppointmentDetailView.as_view(), name='appointment-detail'),
+    # Doctor appointment endpoints
+    path('doctor/appointments/', views.DoctorAppointmentListView.as_view(), name='doctor-appointment-list'),
+    path('doctor/appointments/<uuid:pk>/', views.DoctorAppointmentDetailView.as_view(), name='doctor-appointment-detail'),
+    path('doctor/appointments/<uuid:pk>/status/', views.DoctorAppointmentStatusView.as_view(), name='doctor-appointment-status'),
+    path('doctor/appointments/<uuid:pk>/notes/', views.DoctorAppointmentNotesView.as_view(), name='doctor-appointment-notes'),
+]

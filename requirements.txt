@@ -4,3 +4,8 @@ djangorestframework-simplejwt
 django-environ
 drf-spectacular
 django-cors-headers
+psycopg2-binary
+Pillow
+celery[redis]
+redis
+django-storages

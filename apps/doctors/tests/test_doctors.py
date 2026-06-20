@@ -61,6 +61,8 @@ class DoctorAuthTestCase(APITestCase):
         cache.clear()
         self.doctor_token = res.data['access']
         self.doctor = User.objects.get(email='doctor@test.com')
+        self.doctor.doctor_profile.is_verified = True
+        self.doctor.doctor_profile.save(update_fields=['is_verified'])
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.doctor_token}')
 
 

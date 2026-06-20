@@ -8,6 +8,8 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -194,3 +196,28 @@ class PasswordResetConfirmView(APIView):
             user.save()
 
         return Response({'message': 'Password reset successful.'})
+
+
+class AvatarUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def put(self, request):
+        file = request.FILES.get('avatar')
+        if not file:
+            raise ValidationError({'avatar': 'No file provided.'})
+        if file.size > 5 * 1024 * 1024:
+            raise ValidationError({'avatar': 'File size must not exceed 5 MB.'})
+        allowed = ['image/jpeg', 'image/png']
+        if file.content_type not in allowed:
+            raise ValidationError({'avatar': 'Only JPEG or PNG files are allowed.'})
+
+        request.user.avatar = file
+        request.user.save(update_fields=['avatar'])
+
+        avatar_url = (
+            request.build_absolute_uri(request.user.avatar.url)
+            if request.user.avatar
+            else None
+        )
+        return Response({'avatar_url': avatar_url})

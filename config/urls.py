@@ -8,8 +8,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('apps.users.urls')),
     path('api/', include('apps.core.urls')),
+    path('api/', include('apps.appointments.urls')),
     path('api/doctor/', include('apps.doctors.urls')),
-    path('api/appointments/', include('apps.appointments.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/health/', health_check, name='health-check'),
 ]
