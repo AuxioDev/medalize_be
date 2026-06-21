@@ -1,5 +1,6 @@
 import datetime
 
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
@@ -39,6 +40,23 @@ def _get_workplace(pk, doctor):
         return Workplace.objects.get(pk=pk, doctor=doctor)
     except Workplace.DoesNotExist:
         raise NotFound()
+
+
+def _invalidate_doctor_slots(doctor_id):
+    """Drop every cached availability entry for a doctor (keys ``slots:{doctor_id}:*``).
+
+    Called whenever working hours or blocked periods change, so the next slot
+    query recomputes instead of serving stale cached windows. The django-redis
+    backend supports ``delete_pattern``; backends that don't (e.g. the LocMemCache
+    used in tests) simply no-op.
+    """
+    delete_pattern = getattr(cache, 'delete_pattern', None)
+    if delete_pattern is None:
+        return
+    try:
+        delete_pattern(f'slots:{doctor_id}:*')
+    except Exception:
+        pass
 
 
 def _full_week_hours(workplace):
@@ -111,6 +129,7 @@ class WorkplaceDetailView(APIView):
         except Exception:
             pass
         workplace.delete()
+        _invalidate_doctor_slots(request.user.id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -162,6 +181,7 @@ class WorkingHoursView(APIView):
                 for day in range(7)
             ])
 
+        _invalidate_doctor_slots(request.user.id)
         workplace.refresh_from_db()
         return Response(_full_week_hours(workplace))
 
@@ -189,6 +209,7 @@ class WorkingHoursDayView(APIView):
                 setattr(hours, field, data[field])
         hours.save()
 
+        _invalidate_doctor_slots(request.user.id)
         return Response(WorkingHoursSerializer(hours).data)
 
 
@@ -213,6 +234,8 @@ class BlockedPeriodListCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         notify = serializer.validated_data.pop('notify_patients', False)
         period = serializer.save(doctor=request.user)
+
+        _invalidate_doctor_slots(request.user.id)
 
         if notify:
             try:
@@ -244,11 +267,13 @@ class BlockedPeriodDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.validated_data.pop('notify_patients', None)
         serializer.save()
+        _invalidate_doctor_slots(request.user.id)
         return Response(serializer.data)
 
     def delete(self, request, pk):
         period = self._get_period(pk, request.user)
         period.delete()
+        _invalidate_doctor_slots(request.user.id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
