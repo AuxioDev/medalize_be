@@ -1,6 +1,45 @@
 from rest_framework import serializers
 
+from apps.users.models import DoctorProfile
 from .models import BlockedPeriod, Workplace, WorkingHours
+
+_SLOT_DURATIONS = [15, 20, 30, 45, 60]
+
+
+class DoctorProfileWriteSerializer(serializers.ModelSerializer):
+    specialization = serializers.ChoiceField(
+        choices=DoctorProfile.SPECIALIZATION_CHOICES, required=False
+    )
+
+    class Meta:
+        model = DoctorProfile
+        fields = ['specialization', 'license_number', 'bio', 'slot_duration_min']
+
+    def validate_slot_duration_min(self, value):
+        if value not in _SLOT_DURATIONS:
+            raise serializers.ValidationError(
+                'Slot duration must be one of 15, 20, 30, 45 or 60 minutes.'
+            )
+        return value
+
+
+class DoctorProfileReadSerializer(serializers.ModelSerializer):
+    specialization_display = serializers.CharField(
+        source='get_specialization_display', read_only=True
+    )
+    has_diploma = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DoctorProfile
+        fields = [
+            'specialization', 'specialization_display', 'license_number', 'bio',
+            'slot_duration_min', 'is_verified', 'onboarding_step',
+            'onboarding_complete', 'has_diploma',
+        ]
+        read_only_fields = fields
+
+    def get_has_diploma(self, obj):
+        return bool(obj.diploma_file)
 
 
 class WorkingHoursSerializer(serializers.ModelSerializer):

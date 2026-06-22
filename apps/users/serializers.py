@@ -111,7 +111,10 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DoctorProfile
-        fields = ['specialization', 'specialization_display', 'bio', 'slot_duration_min']
+        fields = [
+            'specialization', 'specialization_display', 'license_number', 'bio',
+            'slot_duration_min',
+        ]
 
 
 class MeSerializer(serializers.ModelSerializer):

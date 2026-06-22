@@ -11,4 +11,6 @@ urlpatterns = [
     path('blocked-periods/', views.BlockedPeriodListCreateView.as_view(), name='blocked-period-list-create'),
     path('blocked-periods/<uuid:pk>/', views.BlockedPeriodDetailView.as_view(), name='blocked-period-detail'),
     path('verify/diploma/', views.DiplomaUploadView.as_view(), name='diploma-upload'),
+    path('profile/', views.DoctorProfileView.as_view(), name='doctor-profile'),
+    path('onboarding/complete/', views.OnboardingCompleteView.as_view(), name='doctor-onboarding-complete'),
 ]

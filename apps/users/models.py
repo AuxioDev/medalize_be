@@ -5,6 +5,22 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 
+def diploma_storage():
+    """Storage for doctor diplomas. Uses Cloudinary's raw storage (handles any
+    file type — PDF, docs, images) when Cloudinary is configured, else the
+    default local storage. A callable keeps the migration stable across
+    environments regardless of which backend is active."""
+    from django.conf import settings
+
+    if getattr(settings, 'USE_CLOUDINARY', False):
+        from cloudinary_storage.storage import RawMediaCloudinaryStorage
+
+        return RawMediaCloudinaryStorage()
+    from django.core.files.storage import default_storage
+
+    return default_storage
+
+
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -86,7 +102,9 @@ class DoctorProfile(models.Model):
     )
     license_number = models.CharField(max_length=100, blank=True)
     bio = models.TextField(blank=True)
-    diploma_file = models.FileField(upload_to='diplomas/', null=True, blank=True)
+    diploma_file = models.FileField(
+        upload_to='diplomas/', null=True, blank=True, storage=diploma_storage
+    )
     is_verified = models.BooleanField(default=False)
     onboarding_step = models.PositiveIntegerField(default=1)
     onboarding_complete = models.BooleanField(default=False)

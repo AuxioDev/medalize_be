@@ -10,3 +10,5 @@ celery[redis]
 redis
 django-redis
 django-storages
+cloudinary
+django-cloudinary-storage

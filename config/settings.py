@@ -175,3 +175,42 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
+# ── Media storage (Cloudinary CDN) ────────────────────────────────────────────
+# Uploads (doctor diplomas, avatars) are stored on Cloudinary when credentials
+# are present; otherwise they fall back to local filesystem storage so local
+# development and tests work without a Cloudinary account.
+CLOUDINARY_CLOUD_NAME = env('CLOUDINARY_CLOUD_NAME', default='')
+CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default='')
+CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default='')
+
+USE_CLOUDINARY = bool(
+    CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET
+)
+
+if USE_CLOUDINARY:
+    INSTALLED_APPS += ['cloudinary', 'cloudinary_storage']
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
+        'API_KEY': CLOUDINARY_API_KEY,
+        'API_SECRET': CLOUDINARY_API_SECRET,
+    }
+    import cloudinary
+
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+    _DEFAULT_FILE_BACKEND = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+else:
+    _DEFAULT_FILE_BACKEND = 'django.core.files.storage.FileSystemStorage'
+
+# Django 5.1+ removed DEFAULT_FILE_STORAGE in favour of the STORAGES setting.
+STORAGES = {
+    'default': {'BACKEND': _DEFAULT_FILE_BACKEND},
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'
+    },
+}

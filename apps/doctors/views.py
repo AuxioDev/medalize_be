@@ -9,11 +9,14 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.users.models import DoctorProfile
 from apps.users.permissions import IsDoctor, IsDoctorVerified
 
 from .models import BlockedPeriod, Workplace, WorkingHours
 from .serializers import (
     BlockedPeriodSerializer,
+    DoctorProfileReadSerializer,
+    DoctorProfileWriteSerializer,
     WorkingHoursPatchSerializer,
     WorkingHoursReplaceItemSerializer,
     WorkingHoursSerializer,
@@ -277,6 +280,63 @@ class BlockedPeriodDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class DoctorProfileView(APIView):
+    """Read/write the authenticated doctor's profile. Available to unverified
+    doctors so they can complete onboarding."""
+
+    permission_classes = [IsDoctor]
+
+    def get(self, request):
+        profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
+        return Response(DoctorProfileReadSerializer(profile).data)
+
+    def patch(self, request):
+        profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
+        serializer = DoctorProfileWriteSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(DoctorProfileReadSerializer(profile).data)
+
+
+class OnboardingCompleteView(APIView):
+    """Finalize doctor onboarding once the required fields and diploma are set.
+    Verification itself stays an admin action (``is_verified`` is untouched)."""
+
+    permission_classes = [IsDoctor]
+
+    def post(self, request):
+        profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
+
+        missing = []
+        if not profile.specialization:
+            missing.append('specialization')
+        if not profile.license_number:
+            missing.append('license_number')
+        if not profile.diploma_file:
+            missing.append('diploma')
+        if missing:
+            return Response(
+                {
+                    'code': 'onboarding_incomplete',
+                    'message': 'Complete all required fields before finishing onboarding.',
+                    'missing': missing,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not profile.onboarding_complete:
+            profile.onboarding_complete = True
+            profile.onboarding_step = 99
+            profile.save(update_fields=['onboarding_complete', 'onboarding_step'])
+
+        return Response(
+            {
+                'onboarding_complete': profile.onboarding_complete,
+                'is_verified': profile.is_verified,
+            }
+        )
+
+
 class DiplomaUploadView(APIView):
     permission_classes = [IsDoctor]
     parser_classes = [MultiPartParser]
@@ -285,13 +345,21 @@ class DiplomaUploadView(APIView):
         file = request.FILES.get('diploma')
         if not file:
             raise ValidationError({'diploma': 'No file provided.'})
+        # Any file type is accepted (images, PDF, documents, …). A 10 MB size cap
+        # is kept; uploads are stored on the configured backend (Cloudinary in
+        # production, local media in development).
         if file.size > 10 * 1024 * 1024:
             raise ValidationError({'diploma': 'File size must not exceed 10 MB.'})
-        allowed = ['image/jpeg', 'image/png', 'application/pdf']
-        if file.content_type not in allowed:
-            raise ValidationError({'diploma': 'Only JPEG, PNG, or PDF files are allowed.'})
 
-        profile = request.user.doctor_profile
+        profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
         profile.diploma_file = file
         profile.save(update_fields=['diploma_file'])
-        return Response({'message': 'Diploma uploaded successfully.'})
+
+        diploma_url = (
+            request.build_absolute_uri(profile.diploma_file.url)
+            if profile.diploma_file
+            else None
+        )
+        return Response(
+            {'message': 'Diploma uploaded successfully.', 'diploma_url': diploma_url}
+        )
