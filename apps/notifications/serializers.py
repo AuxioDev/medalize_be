@@ -8,7 +8,7 @@ class FCMTokenSerializer(serializers.Serializer):
 
 
 class NotificationSerializer(serializers.ModelSerializer):
-    appointment_id = serializers.UUIDField(source='appointment_id', read_only=True)
+    appointment_id = serializers.UUIDField(read_only=True)
 
     class Meta:
         model = Notification

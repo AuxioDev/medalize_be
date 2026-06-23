@@ -36,6 +36,7 @@ class DoctorListView(APIView):
             .filter(role='doctor', doctor_profile__is_verified=True)
             .select_related('doctor_profile')
             .prefetch_related('workplaces')
+            .order_by('first_name', 'last_name', 'id')
         )
         name = request.query_params.get('name', '').strip()
         specialization = request.query_params.get('specialization', '').strip()
