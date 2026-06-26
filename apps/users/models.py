@@ -133,6 +133,9 @@ class PasswordResetOTP(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'used', 'expires_at']),
+        ]
 
 
 @receiver(post_save, sender=User)

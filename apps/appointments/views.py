@@ -33,7 +33,7 @@ class DoctorListView(APIView):
     def get(self, request):
         qs = (
             User.objects
-            .filter(role='doctor', doctor_profile__is_verified=True)
+            .filter(role=User.ROLE_DOCTOR, doctor_profile__is_verified=True)
             .select_related('doctor_profile')
             .prefetch_related('workplaces')
             .order_by('first_name', 'last_name', 'id')
@@ -311,7 +311,11 @@ class DoctorAppointmentStatusView(APIView):
 
     def patch(self, request, pk):
         try:
-            appointment = Appointment.objects.get(pk=pk, doctor=request.user)
+            appointment = (
+                Appointment.objects
+                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+                .get(pk=pk, doctor=request.user)
+            )
         except Appointment.DoesNotExist:
             raise NotFound()
 
@@ -337,13 +341,7 @@ class DoctorAppointmentStatusView(APIView):
         except Exception:
             pass
 
-        return Response(
-            AppointmentSerializer(
-                Appointment.objects.select_related(
-                    'doctor', 'doctor__doctor_profile', 'patient', 'workplace'
-                ).get(pk=appointment.pk)
-            ).data
-        )
+        return Response(AppointmentSerializer(appointment).data)
 
 
 class DoctorAppointmentNotesView(APIView):
@@ -351,7 +349,11 @@ class DoctorAppointmentNotesView(APIView):
 
     def patch(self, request, pk):
         try:
-            appointment = Appointment.objects.get(pk=pk, doctor=request.user)
+            appointment = (
+                Appointment.objects
+                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+                .get(pk=pk, doctor=request.user)
+            )
         except Appointment.DoesNotExist:
             raise NotFound()
 
@@ -359,10 +361,4 @@ class DoctorAppointmentNotesView(APIView):
         serializer.is_valid(raise_exception=True)
         appointment.notes = serializer.validated_data['notes']
         appointment.save(update_fields=['notes', 'updated_at'])
-        return Response(
-            AppointmentSerializer(
-                Appointment.objects.select_related(
-                    'doctor', 'doctor__doctor_profile', 'patient', 'workplace'
-                ).get(pk=appointment.pk)
-            ).data
-        )
+        return Response(AppointmentSerializer(appointment).data)

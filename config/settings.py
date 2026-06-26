@@ -173,8 +173,33 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
+CELERY_BEAT_SCHEDULE = {
+    'send-appointment-reminders': {
+        'task': 'apps.notifications.tasks.send_appointment_reminders',
+        'schedule': timedelta(minutes=30),
+    },
+}
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler'},
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'WARNING',
+    },
+}
 
 # ── Media storage (Cloudinary CDN) ────────────────────────────────────────────
 # Uploads (doctor diplomas, avatars) are stored on Cloudinary when credentials

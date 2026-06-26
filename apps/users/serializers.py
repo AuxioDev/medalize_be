@@ -192,6 +192,9 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         try:
             user = User.objects.get(email=attrs['email'])
         except User.DoesNotExist:
+            # Always hash even on unknown email so response time is constant
+            # regardless of whether the address exists — prevents user enumeration.
+            check_password(attrs['code'], _DUMMY_OTP_HASH)
             raise serializers.ValidationError({'code': 'Invalid or expired code.'})
 
         otp = (

@@ -118,19 +118,16 @@ class WorkplaceDetailView(APIView):
 
     def delete(self, request, pk):
         workplace = _get_workplace(pk, request.user)
-        try:
-            from apps.appointments.models import Appointment
-            if Appointment.objects.filter(
-                workplace=workplace,
-                starts_at__gt=timezone.now(),
-                status__in=[Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED],
-            ).exists():
-                return Response(
-                    {'code': 'conflict', 'message': 'Workplace has upcoming confirmed appointments.'},
-                    status=status.HTTP_409_CONFLICT,
-                )
-        except Exception:
-            pass
+        from apps.appointments.models import Appointment
+        if Appointment.objects.filter(
+            workplace=workplace,
+            starts_at__gt=timezone.now(),
+            status__in=[Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED],
+        ).exists():
+            return Response(
+                {'code': 'conflict', 'message': 'Workplace has upcoming confirmed appointments.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         workplace.delete()
         _invalidate_doctor_slots(request.user.id)
         return Response(status=status.HTTP_204_NO_CONTENT)

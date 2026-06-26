@@ -1,5 +1,6 @@
 import secrets
 from datetime import timedelta
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
@@ -7,6 +8,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser
@@ -208,9 +210,18 @@ class AvatarUploadView(APIView):
             raise ValidationError({'avatar': 'No file provided.'})
         if file.size > 5 * 1024 * 1024:
             raise ValidationError({'avatar': 'File size must not exceed 5 MB.'})
-        allowed = ['image/jpeg', 'image/png']
-        if file.content_type not in allowed:
+        # Validate actual file bytes — content_type is user-controlled and can be spoofed.
+        try:
+            img = Image.open(BytesIO(file.read()))
+            img.verify()
+            if img.format not in ('JPEG', 'PNG'):
+                raise ValidationError({'avatar': 'Only JPEG or PNG files are allowed.'})
+        except ValidationError:
+            raise
+        except Exception:
             raise ValidationError({'avatar': 'Only JPEG or PNG files are allowed.'})
+        finally:
+            file.seek(0)
 
         request.user.avatar = file
         request.user.save(update_fields=['avatar'])
