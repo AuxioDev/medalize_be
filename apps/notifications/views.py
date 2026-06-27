@@ -27,11 +27,24 @@ class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = Notification.objects.filter(user=request.user)
+        qs = (
+            Notification.objects
+            .filter(user=request.user)
+            .select_related('appointment')
+            .order_by('-created_at')
+        )
         paginator = PageNumberPagination()
         paginator.page_size = 20
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(NotificationSerializer(page, many=True).data)
+
+
+class NotificationUnreadCountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        count = Notification.objects.filter(user=request.user, is_read=False).count()
+        return Response({'unread_count': count})
 
 
 class NotificationReadView(APIView):

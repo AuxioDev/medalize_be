@@ -17,7 +17,7 @@ def _send_email(subject, message, recipient_email):
         pass
 
 
-def _send_push(user, title, body):
+def _send_push(user, title, body, data=None):
     """Send FCM push to all registered tokens for user. No-op if Firebase not configured."""
     if not getattr(settings, 'FIREBASE_CREDENTIALS_JSON', ''):
         return
@@ -28,9 +28,12 @@ def _send_push(user, title, body):
         if not tokens:
             return
         notification = messaging.Notification(title=title, body=body)
-        msg = messaging.MulticastMessage(notification=notification, tokens=tokens)
+        msg = messaging.MulticastMessage(
+            notification=notification,
+            tokens=tokens,
+            data={k: str(v) for k, v in (data or {}).items()},
+        )
         resp = messaging.send_each_for_multicast(msg)
-        # Clean up invalid tokens
         invalid = {
             tokens[i]
             for i, r in enumerate(resp.responses)
@@ -63,7 +66,8 @@ def send_booking_confirmed(appointment_id):
         message=msg,
     )
     _send_email('Appointment Confirmed — Medalize', msg, appt.patient.email)
-    _send_push(appt.patient, 'Appointment Confirmed', msg)
+    _send_push(appt.patient, 'Appointment Confirmed', msg,
+               data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
 @shared_task
@@ -100,8 +104,9 @@ def send_booking_cancelled(appointment_id):
     ])
     _send_email('Appointment Cancelled — Medalize', patient_msg, appt.patient.email)
     _send_email('Appointment Cancelled — Medalize', doctor_msg, appt.doctor.email)
-    _send_push(appt.patient, 'Appointment Cancelled', patient_msg)
-    _send_push(appt.doctor, 'Appointment Cancelled', doctor_msg)
+    push_data = {'type': 'appointment', 'appointment_id': str(appt.id)}
+    _send_push(appt.patient, 'Appointment Cancelled', patient_msg, data=push_data)
+    _send_push(appt.doctor, 'Appointment Cancelled', doctor_msg, data=push_data)
 
 
 @shared_task
@@ -131,7 +136,8 @@ def send_rescheduling_required(appointment_id):
         message=msg,
     )
     _send_email('Rescheduling Required — Medalize', msg, appt.patient.email)
-    _send_push(appt.patient, 'Rescheduling Required', msg)
+    _send_push(appt.patient, 'Rescheduling Required', msg,
+               data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
 @shared_task
@@ -155,7 +161,8 @@ def send_appointment_rescheduled(appointment_id):
         message=doctor_msg,
     )
     _send_email('Appointment Rescheduled — Medalize', doctor_msg, appt.doctor.email)
-    _send_push(appt.doctor, 'Appointment Rescheduled', doctor_msg)
+    _send_push(appt.doctor, 'Appointment Rescheduled', doctor_msg,
+               data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
 @shared_task
@@ -226,7 +233,8 @@ def notify_waitlist_slot_available(doctor_id):
     ])
     for entry in waiting:
         _send_email('Slot Available — Medalize', msg, entry.patient.email)
-        _send_push(entry.patient, title, msg)
+        _send_push(entry.patient, title, msg,
+                   data={'type': 'doctor', 'doctor_id': str(doctor.id)})
 
 
 @shared_task
@@ -292,7 +300,34 @@ def send_appointment_completed(appointment_id):
         message=msg,
     )
     _send_email('Appointment Complete — Medalize', msg, appt.patient.email)
-    _send_push(appt.patient, 'Appointment Complete', msg)
+    _send_push(appt.patient, 'Appointment Complete', msg,
+               data={'type': 'appointment', 'appointment_id': str(appt.id)})
+
+
+@shared_task
+def send_new_booking_pending(appointment_id):
+    """Notify the doctor when a patient books a new appointment (pending confirmation)."""
+    from apps.appointments.models import Appointment
+    from .models import Notification
+    try:
+        appt = Appointment.objects.select_related('doctor', 'patient').get(pk=appointment_id)
+    except Appointment.DoesNotExist:
+        return
+
+    patient_name = f'{appt.patient.first_name} {appt.patient.last_name}'.strip() or appt.patient.email
+    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
+    msg = f'{patient_name} has requested an appointment on {date_str}. Please confirm or decline.'
+
+    Notification.objects.create(
+        user=appt.doctor,
+        appointment=appt,
+        type=Notification.TYPE_GENERAL,
+        title='New Appointment Request',
+        message=msg,
+    )
+    _send_email('New Appointment Request — Medalize', msg, appt.doctor.email)
+    _send_push(appt.doctor, 'New Appointment Request', msg,
+               data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
 @shared_task

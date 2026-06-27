@@ -179,6 +179,7 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
     consultation_fee = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -186,7 +187,7 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
             'id', 'first_name', 'last_name',
             'specialization', 'specialization_display',
             'slot_duration_min', 'consultation_fee', 'primary_workplace',
-            'average_rating', 'review_count',
+            'average_rating', 'review_count', 'avatar_url',
         ]
 
     def get_specialization(self, obj):
@@ -234,6 +235,15 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
             return str(fee) if fee is not None else None
         except Exception:
             return None
+
+    def get_avatar_url(self, obj):
+        if not obj.avatar:
+            return None
+        url = obj.avatar.url
+        request = self.context.get('request')
+        if request and not url.startswith(('http://', 'https://')):
+            url = request.build_absolute_uri(url)
+        return url
 
 
 class DoctorDetailSerializer(DoctorPublicSerializer):

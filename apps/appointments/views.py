@@ -66,7 +66,9 @@ class DoctorListView(APIView):
         paginator = PageNumberPagination()
         paginator.page_size = 20
         page = paginator.paginate_queryset(qs, request)
-        return paginator.get_paginated_response(DoctorPublicSerializer(page, many=True).data)
+        return paginator.get_paginated_response(
+            DoctorPublicSerializer(page, many=True, context={'request': request}).data
+        )
 
 
 class DoctorDetailView(APIView):
@@ -83,7 +85,7 @@ class DoctorDetailView(APIView):
             )
         except User.DoesNotExist:
             raise NotFound()
-        return Response(DoctorDetailSerializer(doctor).data)
+        return Response(DoctorDetailSerializer(doctor, context={'request': request}).data)
 
 
 class SlotListView(APIView):
@@ -219,6 +221,11 @@ class PatientAppointmentListCreateView(APIView):
             f'slots:{appointment.doctor_id}:{appointment.workplace_id}'
             f':{appointment.starts_at.date()}'
         )
+        try:
+            from apps.notifications.tasks import send_new_booking_pending
+            send_new_booking_pending.delay(str(appointment.pk))
+        except Exception:
+            pass
         return Response(
             AppointmentSerializer(
                 Appointment.objects.select_related(
