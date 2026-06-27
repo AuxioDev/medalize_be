@@ -11,6 +11,7 @@ urlpatterns = [
     path('appointments/', views.PatientAppointmentListCreateView.as_view(), name='appointment-list-create'),
     path('appointments/<uuid:pk>/', views.PatientAppointmentDetailView.as_view(), name='appointment-detail'),
     path('appointments/<uuid:pk>/reschedule/', views.PatientAppointmentRescheduleView.as_view(), name='appointment-reschedule'),
+    path('doctors/<uuid:pk>/next-slot/', views.DoctorNextSlotView.as_view(), name='doctor-next-slot'),
     # Review endpoints
     path('appointments/<uuid:pk>/review/', views.AppointmentReviewView.as_view(), name='appointment-review'),
     path('doctors/<uuid:pk>/reviews/', views.DoctorReviewListView.as_view(), name='doctor-reviews'),

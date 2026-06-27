@@ -3,7 +3,7 @@ import datetime
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Avg, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
@@ -44,6 +44,7 @@ class DoctorListView(APIView):
         name = request.query_params.get('name', '').strip()
         specialization = request.query_params.get('specialization', '').strip()
         city = request.query_params.get('city', '').strip()
+        min_rating = request.query_params.get('min_rating', '').strip()
 
         if name:
             qs = qs.filter(Q(first_name__icontains=name) | Q(last_name__icontains=name))
@@ -51,6 +52,14 @@ class DoctorListView(APIView):
             qs = qs.filter(doctor_profile__specialization=specialization)
         if city:
             qs = qs.filter(workplaces__city__icontains=city).distinct()
+        if min_rating:
+            try:
+                min_rating_val = float(min_rating)
+                qs = qs.annotate(avg_rating=Avg('doctor_reviews__rating')).filter(
+                    avg_rating__gte=min_rating_val
+                )
+            except ValueError:
+                pass
 
         paginator = PageNumberPagination()
         paginator.page_size = 20
@@ -262,6 +271,68 @@ class PatientAppointmentDetailView(APIView):
             f':{appointment.starts_at.date()}'
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DoctorNextSlotView(APIView):
+    """Returns the next available date (within 14 days) for a given doctor."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            doctor = User.objects.select_related('doctor_profile').get(
+                pk=pk, role='doctor', doctor_profile__is_verified=True
+            )
+        except User.DoesNotExist:
+            raise NotFound()
+
+        try:
+            slot_duration = doctor.doctor_profile.slot_duration_min
+        except Exception:
+            slot_duration = 30
+
+        today = timezone.now().date()
+        for days_ahead in range(14):
+            check_date = today + datetime.timedelta(days=days_ahead)
+            weekday = check_date.weekday()
+            wh_qs = WorkingHours.objects.filter(
+                workplace__doctor=doctor, weekday=weekday, is_active=True
+            )
+            if not wh_qs.exists():
+                continue
+
+            for wh in wh_qs:
+                day_start = timezone.make_aware(
+                    datetime.datetime.combine(check_date, wh.start_time)
+                )
+                day_end = timezone.make_aware(
+                    datetime.datetime.combine(check_date, wh.end_time)
+                )
+                delta = datetime.timedelta(minutes=slot_duration)
+                current = max(day_start, timezone.now())
+
+                blocked = list(BlockedPeriod.objects.filter(
+                    doctor=doctor,
+                    starts_at__date__lte=check_date,
+                    ends_at__date__gte=check_date,
+                ).filter(Q(workplace=wh.workplace) | Q(workplace__isnull=True)))
+
+                existing = list(Appointment.objects.filter(
+                    doctor=doctor,
+                    starts_at__date=check_date,
+                ).exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED]))
+
+                while current + delta <= day_end:
+                    w_end = current + delta
+                    occupied = any(
+                        bp.starts_at < w_end and bp.ends_at > current for bp in blocked
+                    ) or any(
+                        a.starts_at < w_end and a.ends_at > current for a in existing
+                    )
+                    if not occupied:
+                        return Response({'next_available_date': check_date.isoformat()})
+                    current += delta
+
+        return Response({'next_available_date': None})
 
 
 class PatientAppointmentRescheduleView(APIView):

@@ -41,6 +41,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='review',
-            index=models.Index(fields=['doctor'], name='appointments_review_doctor_idx'),
+            index=models.Index(fields=['doctor'], name='appointment_doctor__dd3270_idx'),
         ),
     ]

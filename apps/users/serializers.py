@@ -43,6 +43,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['role'] = self.user.role
         data['user_id'] = str(self.user.id)
         data['email'] = self.user.email
+        data['first_name'] = self.user.first_name
+        data['last_name'] = self.user.last_name
 
         if self.user.role == User.ROLE_DOCTOR:
             try:

@@ -79,7 +79,7 @@ class Review(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['doctor']),
+            models.Index(fields=['doctor'], name='appointment_doctor__dd3270_idx'),
         ]
 
     def __str__(self):
