@@ -19,13 +19,14 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .models import PasswordResetOTP
+from .models import PasswordResetOTP, PatientProfile
 from .serializers import (
     CustomTokenObtainPairSerializer,
     MeSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    PatientProfileSerializer,
     RegisterSerializer,
 )
 from .throttles import LoginRateThrottle, PasswordResetRateThrottle, RegisterRateThrottle
@@ -107,6 +108,21 @@ class MeView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(MeSerializer(request.user).data)
+
+
+class PatientProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile, _ = PatientProfile.objects.get_or_create(user=request.user)
+        return Response(PatientProfileSerializer(profile).data)
+
+    def patch(self, request):
+        profile, _ = PatientProfile.objects.get_or_create(user=request.user)
+        serializer = PatientProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(PatientProfileSerializer(profile).data)
 
 
 class PasswordChangeView(APIView):

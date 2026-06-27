@@ -1,5 +1,20 @@
 from celery import shared_task
+from django.conf import settings
+from django.core.mail import send_mail
 from django.utils import timezone
+
+
+def _send_email(subject, message, recipient_email):
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient_email],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
 
 
 @shared_task
@@ -13,14 +28,16 @@ def send_booking_confirmed(appointment_id):
 
     doctor_name = f'{appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
     date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
+    msg = f'Your appointment with Dr. {doctor_name} on {date_str} has been confirmed.'
 
     Notification.objects.create(
         user=appt.patient,
         appointment=appt,
         type=Notification.TYPE_CONFIRMED,
         title='Appointment Confirmed',
-        message=f'Your appointment with Dr. {doctor_name} on {date_str} has been confirmed.',
+        message=msg,
     )
+    _send_email('Appointment Confirmed — Medalize', msg, appt.patient.email)
 
 
 @shared_task
@@ -36,22 +53,27 @@ def send_booking_cancelled(appointment_id):
     patient_name = f'{appt.patient.first_name} {appt.patient.last_name}'.strip() or appt.patient.email
     date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
 
+    patient_msg = f'Your appointment with Dr. {doctor_name} on {date_str} has been cancelled.'
+    doctor_msg = f'The appointment with {patient_name} on {date_str} has been cancelled.'
+
     Notification.objects.bulk_create([
         Notification(
             user=appt.patient,
             appointment=appt,
             type=Notification.TYPE_CANCELLED,
             title='Appointment Cancelled',
-            message=f'Your appointment with Dr. {doctor_name} on {date_str} has been cancelled.',
+            message=patient_msg,
         ),
         Notification(
             user=appt.doctor,
             appointment=appt,
             type=Notification.TYPE_CANCELLED,
             title='Appointment Cancelled',
-            message=f'The appointment with {patient_name} on {date_str} has been cancelled.',
+            message=doctor_msg,
         ),
     ])
+    _send_email('Appointment Cancelled — Medalize', patient_msg, appt.patient.email)
+    _send_email('Appointment Cancelled — Medalize', doctor_msg, appt.doctor.email)
 
 
 @shared_task
@@ -68,17 +90,61 @@ def send_rescheduling_required(appointment_id):
 
     doctor_name = f'{appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
     date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
+    msg = (
+        f'Your appointment with Dr. {doctor_name} on {date_str} '
+        'needs to be rescheduled. Please book a new time slot.'
+    )
 
     Notification.objects.create(
         user=appt.patient,
         appointment=appt,
         type=Notification.TYPE_RESCHEDULING,
         title='Appointment Rescheduling Required',
-        message=(
-            f'Your appointment with Dr. {doctor_name} on {date_str} '
-            'needs to be rescheduled. Please book a new time slot.'
-        ),
+        message=msg,
     )
+    _send_email('Rescheduling Required — Medalize', msg, appt.patient.email)
+
+
+@shared_task
+def send_appointment_rescheduled(appointment_id):
+    from apps.appointments.models import Appointment
+    from .models import Notification
+    try:
+        appt = Appointment.objects.select_related('doctor', 'patient').get(pk=appointment_id)
+    except Appointment.DoesNotExist:
+        return
+
+    patient_name = f'{appt.patient.first_name} {appt.patient.last_name}'.strip() or appt.patient.email
+    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
+    doctor_msg = f'{patient_name} rescheduled their appointment to {date_str}.'
+
+    Notification.objects.create(
+        user=appt.doctor,
+        appointment=appt,
+        type=Notification.TYPE_GENERAL,
+        title='Appointment Rescheduled',
+        message=doctor_msg,
+    )
+    _send_email('Appointment Rescheduled — Medalize', doctor_msg, appt.doctor.email)
+
+
+@shared_task
+def send_doctor_verified(user_id):
+    from apps.users.models import User
+    from .models import Notification
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return
+
+    msg = 'Your account has been verified. You can now receive appointments from patients.'
+    Notification.objects.create(
+        user=user,
+        type=Notification.TYPE_GENERAL,
+        title='Account Verified',
+        message=msg,
+    )
+    _send_email('Your Medalize Account is Verified', msg, user.email)
 
 
 @shared_task
@@ -121,7 +187,8 @@ def send_appointment_reminders():
     for appt in upcoming:
         doctor_name = f'{appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
         date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-        msg = f'Reminder: appointment with Dr. {doctor_name} at {date_str}.'
+        patient_msg = f'Reminder: appointment with Dr. {doctor_name} at {date_str}.'
+        doctor_msg = f'Reminder: appointment with {appt.patient.first_name} {appt.patient.last_name} at {date_str}.'
 
         Notification.objects.bulk_create([
             Notification(
@@ -129,13 +196,15 @@ def send_appointment_reminders():
                 appointment=appt,
                 type=Notification.TYPE_REMINDER,
                 title='Appointment Reminder',
-                message=msg,
+                message=patient_msg,
             ),
             Notification(
                 user=appt.doctor,
                 appointment=appt,
                 type=Notification.TYPE_REMINDER,
                 title='Appointment Reminder',
-                message=f'Reminder: appointment with {appt.patient.first_name} {appt.patient.last_name} at {date_str}.',
+                message=doctor_msg,
             ),
         ])
+        _send_email('Appointment Reminder — Medalize', patient_msg, appt.patient.email)
+        _send_email('Appointment Reminder — Medalize', doctor_msg, appt.doctor.email)

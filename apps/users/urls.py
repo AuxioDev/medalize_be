@@ -9,6 +9,7 @@ from .views import (
     PasswordChangeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
+    PatientProfileView,
     RegisterView,
 )
 
@@ -19,6 +20,7 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='auth-logout'),
     path('me/', MeView.as_view(), name='auth-me'),
     path('profile/avatar/', AvatarUploadView.as_view(), name='auth-avatar-upload'),
+    path('profile/patient/', PatientProfileView.as_view(), name='auth-patient-profile'),
     path('password/change/', PasswordChangeView.as_view(), name='auth-password-change'),
     path('password/reset/', PasswordResetRequestView.as_view(), name='auth-password-reset'),
     path('password/reset/confirm/', PasswordResetConfirmView.as_view(), name='auth-password-reset-confirm'),

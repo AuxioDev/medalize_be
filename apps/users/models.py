@@ -72,6 +72,12 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class DoctorProfile(models.Model):
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._original_is_verified = instance.is_verified
+        return instance
+
     SPECIALIZATION_CHOICES = [
         ('general_practice', 'General Practice'),
         ('cardiology', 'Cardiology'),
@@ -119,6 +125,9 @@ class PatientProfile(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     blood_type = models.CharField(max_length=5, blank=True)
     address = models.TextField(blank=True)
+    allergies = models.TextField(blank=True)
+    chronic_conditions = models.TextField(blank=True)
+    medications = models.TextField(blank=True)
 
     def __str__(self):
         return f'Patient: {self.user.email}'
@@ -146,3 +155,16 @@ def create_role_profile(sender, instance, created, **kwargs):
         DoctorProfile.objects.create(user=instance)
     elif instance.role == User.ROLE_PATIENT:
         PatientProfile.objects.create(user=instance)
+
+
+@receiver(post_save, sender=DoctorProfile)
+def notify_doctor_verified(sender, instance, created, **kwargs):
+    if created:
+        return
+    original = getattr(instance, '_original_is_verified', None)
+    if original is False and instance.is_verified is True:
+        try:
+            from apps.notifications.tasks import send_doctor_verified
+            send_doctor_verified.delay(instance.user_id)
+        except Exception:
+            pass

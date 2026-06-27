@@ -97,7 +97,7 @@ class RegisterSerializer(serializers.Serializer):
 class PatientProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = PatientProfile
-        fields = ['date_of_birth', 'blood_type', 'address']
+        fields = ['date_of_birth', 'blood_type', 'address', 'allergies', 'chronic_conditions', 'medications']
 
 
 class DoctorProfileSerializer(serializers.ModelSerializer):

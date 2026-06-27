@@ -1,11 +1,12 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.utils import timezone
 from rest_framework import serializers
 
 from apps.doctors.models import Workplace
-from .models import Appointment
+from .models import Appointment, Review
 
 User = get_user_model()
 
@@ -123,11 +124,59 @@ class DoctorNotesSerializer(serializers.Serializer):
     notes = serializers.CharField(allow_blank=True)
 
 
+class RescheduleSerializer(serializers.Serializer):
+    starts_at = serializers.DateTimeField()
+
+    def validate_starts_at(self, value):
+        if value <= timezone.now():
+            raise serializers.ValidationError('New appointment time must be in the future.')
+        return value
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Review
+        fields = ['id', 'appointment', 'rating', 'comment', 'patient_name', 'created_at']
+        read_only_fields = ['id', 'appointment', 'patient_name', 'created_at']
+
+    def get_patient_name(self, obj):
+        return f'{obj.patient.first_name} {obj.patient.last_name}'.strip() or obj.patient.email
+
+
+class ReviewCreateSerializer(serializers.Serializer):
+    rating = serializers.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment = serializers.CharField(allow_blank=True, default='')
+
+    def validate(self, attrs):
+        appointment = self.context['appointment']
+        if appointment.status != Appointment.STATUS_COMPLETED:
+            raise serializers.ValidationError('Reviews can only be left for completed appointments.')
+        if appointment.patient != self.context['request'].user:
+            raise serializers.ValidationError('You can only review your own appointments.')
+        if hasattr(appointment, 'review'):
+            raise serializers.ValidationError('You have already reviewed this appointment.')
+        return attrs
+
+    def create(self, validated_data):
+        appointment = self.context['appointment']
+        return Review.objects.create(
+            appointment=appointment,
+            doctor=appointment.doctor,
+            patient=appointment.patient,
+            rating=validated_data['rating'],
+            comment=validated_data.get('comment', ''),
+        )
+
+
 class DoctorPublicSerializer(serializers.ModelSerializer):
     specialization = serializers.SerializerMethodField()
     specialization_display = serializers.SerializerMethodField()
     slot_duration_min = serializers.SerializerMethodField()
     primary_workplace = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -135,6 +184,7 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
             'id', 'first_name', 'last_name',
             'specialization', 'specialization_display',
             'slot_duration_min', 'primary_workplace',
+            'average_rating', 'review_count',
         ]
 
     def get_specialization(self, obj):
@@ -162,6 +212,14 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
         if not wp:
             return None
         return {'id': str(wp.id), 'name': wp.name, 'city': wp.city, 'address': wp.address}
+
+    def get_average_rating(self, obj):
+        from django.db.models import Avg
+        result = obj.doctor_reviews.aggregate(avg=Avg('rating'))['avg']
+        return round(result, 1) if result is not None else None
+
+    def get_review_count(self, obj):
+        return obj.doctor_reviews.count()
 
 
 class DoctorDetailSerializer(DoctorPublicSerializer):

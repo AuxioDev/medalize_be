@@ -55,13 +55,21 @@ class DoctorProfileAdmin(admin.ModelAdmin):
 
     @admin.action(description='Verify selected doctors')
     def verify_doctors(self, request, queryset):
-        updated = queryset.filter(is_verified=False).update(is_verified=True)
-        self.message_user(request, f'{updated} doctor(s) verified.')
+        count = 0
+        for profile in queryset.filter(is_verified=False):
+            profile.is_verified = True
+            profile.save(update_fields=['is_verified'])
+            count += 1
+        self.message_user(request, f'{count} doctor(s) verified.')
 
     @admin.action(description='Unverify selected doctors')
     def unverify_doctors(self, request, queryset):
-        updated = queryset.filter(is_verified=True).update(is_verified=False)
-        self.message_user(request, f'{updated} doctor(s) unverified.')
+        count = 0
+        for profile in queryset.filter(is_verified=True):
+            profile.is_verified = False
+            profile.save(update_fields=['is_verified'])
+            count += 1
+        self.message_user(request, f'{count} doctor(s) unverified.')
 
 
 @admin.register(PatientProfile)

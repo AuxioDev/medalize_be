@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
 from apps.users.permissions import IsDoctor, IsPatient
-from .models import Appointment
+from .models import Appointment, Review
 from .serializers import (
     AppointmentSerializer,
     AppointmentStatusSerializer,
@@ -22,6 +22,9 @@ from .serializers import (
     DoctorDetailSerializer,
     DoctorNotesSerializer,
     DoctorPublicSerializer,
+    RescheduleSerializer,
+    ReviewCreateSerializer,
+    ReviewSerializer,
 )
 
 User = get_user_model()
@@ -261,6 +264,69 @@ class PatientAppointmentDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class PatientAppointmentRescheduleView(APIView):
+    permission_classes = [IsPatient]
+
+    def patch(self, request, pk):
+        try:
+            appointment = (
+                Appointment.objects
+                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+                .get(pk=pk, patient=request.user)
+            )
+        except Appointment.DoesNotExist:
+            raise NotFound()
+
+        if appointment.status not in [Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED]:
+            return Response(
+                {'code': 'conflict', 'message': 'Only pending or confirmed appointments can be rescheduled.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if appointment.starts_at <= timezone.now() + datetime.timedelta(hours=2):
+            return Response(
+                {'code': 'conflict', 'message': 'Cannot reschedule within 2 hours of appointment.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer = RescheduleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_starts_at = serializer.validated_data['starts_at']
+
+        try:
+            slot_duration = appointment.doctor.doctor_profile.slot_duration_min
+        except Exception:
+            slot_duration = 30
+        new_ends_at = new_starts_at + datetime.timedelta(minutes=slot_duration)
+
+        with transaction.atomic():
+            overlap = (
+                Appointment.objects
+                .select_for_update()
+                .filter(doctor=appointment.doctor, starts_at__lt=new_ends_at, ends_at__gt=new_starts_at)
+                .exclude(pk=appointment.pk)
+                .exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED])
+            )
+            if overlap.exists():
+                raise ValidationError({'starts_at': 'This slot is no longer available.'})
+
+            old_date = appointment.starts_at.date()
+            appointment.starts_at = new_starts_at
+            appointment.ends_at = new_ends_at
+            appointment.status = Appointment.STATUS_PENDING
+            appointment.save(update_fields=['starts_at', 'ends_at', 'status', 'updated_at'])
+
+        cache.delete(f'slots:{appointment.doctor_id}:{appointment.workplace_id}:{old_date}')
+        cache.delete(f'slots:{appointment.doctor_id}:{appointment.workplace_id}:{new_starts_at.date()}')
+
+        try:
+            from apps.notifications.tasks import send_appointment_rescheduled
+            send_appointment_rescheduled.delay(str(appointment.id))
+        except Exception:
+            pass
+
+        return Response(AppointmentSerializer(appointment).data)
+
+
 class DoctorAppointmentListView(APIView):
     permission_classes = [IsDoctor]
 
@@ -362,3 +428,39 @@ class DoctorAppointmentNotesView(APIView):
         appointment.notes = serializer.validated_data['notes']
         appointment.save(update_fields=['notes', 'updated_at'])
         return Response(AppointmentSerializer(appointment).data)
+
+
+class AppointmentReviewView(APIView):
+    permission_classes = [IsPatient]
+
+    def post(self, request, pk):
+        try:
+            appointment = Appointment.objects.select_related('doctor', 'patient').get(
+                pk=pk, patient=request.user
+            )
+        except Appointment.DoesNotExist:
+            raise NotFound()
+
+        serializer = ReviewCreateSerializer(
+            data=request.data,
+            context={'appointment': appointment, 'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        review = serializer.save()
+        return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)
+
+
+class DoctorReviewListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            doctor = User.objects.get(pk=pk, role=User.ROLE_DOCTOR)
+        except User.DoesNotExist:
+            raise NotFound()
+
+        reviews = Review.objects.filter(doctor=doctor).select_related('patient')
+        paginator = PageNumberPagination()
+        paginator.page_size = 20
+        page = paginator.paginate_queryset(reviews, request)
+        return paginator.get_paginated_response(ReviewSerializer(page, many=True).data)
