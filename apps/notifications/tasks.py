@@ -170,6 +170,34 @@ def notify_blocked_period_patients(blocked_period_id):
 
 
 @shared_task
+def notify_waitlist_slot_available(doctor_id):
+    from apps.appointments.models import Waitlist
+    from apps.users.models import User
+    from .models import Notification
+    try:
+        doctor = User.objects.get(pk=doctor_id)
+    except User.DoesNotExist:
+        return
+
+    doctor_name = f'Dr. {doctor.first_name} {doctor.last_name}'.strip() or f'Dr. {doctor.email}'
+    msg = f'A slot has opened up with {doctor_name}. Book your appointment now.'
+    title = 'New Slot Available'
+
+    waiting = Waitlist.objects.filter(doctor=doctor).select_related('patient')
+    Notification.objects.bulk_create([
+        Notification(
+            user=entry.patient,
+            type=Notification.TYPE_GENERAL,
+            title=title,
+            message=msg,
+        )
+        for entry in waiting
+    ])
+    for entry in waiting:
+        _send_email('Slot Available — Medalize', msg, entry.patient.email)
+
+
+@shared_task
 def send_appointment_reminders():
     from apps.appointments.models import Appointment
     from .models import Notification

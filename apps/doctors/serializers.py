@@ -13,7 +13,7 @@ class DoctorProfileWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DoctorProfile
-        fields = ['specialization', 'license_number', 'bio', 'slot_duration_min']
+        fields = ['specialization', 'license_number', 'bio', 'slot_duration_min', 'consultation_fee']
 
     def validate_slot_duration_min(self, value):
         if value not in _SLOT_DURATIONS:
@@ -33,7 +33,7 @@ class DoctorProfileReadSerializer(serializers.ModelSerializer):
         model = DoctorProfile
         fields = [
             'specialization', 'specialization_display', 'license_number', 'bio',
-            'slot_duration_min', 'is_verified', 'onboarding_step',
+            'slot_duration_min', 'consultation_fee', 'is_verified', 'onboarding_step',
             'onboarding_complete', 'has_diploma',
         ]
         read_only_fields = fields

@@ -2,6 +2,8 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 class Appointment(models.Model):
@@ -51,8 +53,49 @@ class Appointment(models.Model):
         ]
         ordering = ['-starts_at']
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._original_status = instance.status
+        return instance
+
     def __str__(self):
         return f'{self.patient} → Dr.{self.doctor} @ {self.starts_at:%Y-%m-%d %H:%M}'
+
+
+@receiver(post_save, sender='appointments.Appointment')
+def notify_waitlist_on_cancellation(sender, instance, created, **kwargs):
+    if created:
+        return
+    original = getattr(instance, '_original_status', None)
+    if original not in (None, Appointment.STATUS_CANCELLED) and instance.status == Appointment.STATUS_CANCELLED:
+        try:
+            from apps.notifications.tasks import notify_waitlist_slot_available
+            notify_waitlist_slot_available.delay(str(instance.doctor_id))
+        except Exception:
+            pass
+
+
+class Waitlist(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='waitlist_entries',
+    )
+    doctor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='waitlist',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['patient', 'doctor']]
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.patient} waiting for Dr.{self.doctor}'
 
 
 class Review(models.Model):

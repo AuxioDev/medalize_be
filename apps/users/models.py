@@ -115,6 +115,7 @@ class DoctorProfile(models.Model):
     onboarding_step = models.PositiveIntegerField(default=1)
     onboarding_complete = models.BooleanField(default=False)
     slot_duration_min = models.PositiveIntegerField(default=30)
+    consultation_fee = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return f'Dr. {self.user.email}'

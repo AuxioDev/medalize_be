@@ -177,13 +177,14 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
     primary_workplace = serializers.SerializerMethodField()
     average_rating = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
+    consultation_fee = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'first_name', 'last_name',
             'specialization', 'specialization_display',
-            'slot_duration_min', 'primary_workplace',
+            'slot_duration_min', 'consultation_fee', 'primary_workplace',
             'average_rating', 'review_count',
         ]
 
@@ -220,6 +221,13 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
 
     def get_review_count(self, obj):
         return obj.doctor_reviews.count()
+
+    def get_consultation_fee(self, obj):
+        try:
+            fee = obj.doctor_profile.consultation_fee
+            return str(fee) if fee is not None else None
+        except Exception:
+            return None
 
 
 class DoctorDetailSerializer(DoctorPublicSerializer):

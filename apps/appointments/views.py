@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
 from apps.users.permissions import IsDoctor, IsPatient
-from .models import Appointment, Review
+from .models import Appointment, Review, Waitlist
 from .serializers import (
     AppointmentSerializer,
     AppointmentStatusSerializer,
@@ -535,3 +535,82 @@ class DoctorReviewListView(APIView):
         paginator.page_size = 20
         page = paginator.paginate_queryset(reviews, request)
         return paginator.get_paginated_response(ReviewSerializer(page, many=True).data)
+
+
+class WaitlistView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        entries = Waitlist.objects.filter(patient=request.user).select_related('doctor')
+        data = [
+            {
+                'id': str(e.id),
+                'doctor_id': str(e.doctor_id),
+                'doctor_name': f'{e.doctor.first_name} {e.doctor.last_name}'.strip() or e.doctor.email,
+                'joined_at': e.created_at.isoformat(),
+            }
+            for e in entries
+        ]
+        return Response(data)
+
+    def post(self, request):
+        doctor_id = request.data.get('doctor_id')
+        if not doctor_id:
+            raise ValidationError({'doctor_id': 'This field is required.'})
+        try:
+            doctor = User.objects.get(pk=doctor_id, role=User.ROLE_DOCTOR)
+        except (User.DoesNotExist, ValueError):
+            raise NotFound('Doctor not found.')
+        entry, created = Waitlist.objects.get_or_create(patient=request.user, doctor=doctor)
+        if not created:
+            return Response({'detail': 'Already on waitlist.'}, status=status.HTTP_200_OK)
+        return Response({'id': str(entry.id), 'doctor_id': str(doctor.id)}, status=status.HTTP_201_CREATED)
+
+
+class WaitlistDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            entry = Waitlist.objects.get(pk=pk, patient=request.user)
+        except Waitlist.DoesNotExist:
+            raise NotFound()
+        entry.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DoctorStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.users.permissions import IsDoctor
+        if request.user.role != request.user.ROLE_DOCTOR:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        now = timezone.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_month_end = month_start
+        last_month_start = (month_start - datetime.timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        qs = Appointment.objects.filter(doctor=request.user)
+
+        this_month = qs.filter(starts_at__gte=month_start).count()
+        last_month = qs.filter(starts_at__gte=last_month_start, starts_at__lt=last_month_end).count()
+        pending = qs.filter(status=Appointment.STATUS_PENDING).count()
+        total_patients = qs.values('patient').distinct().count()
+
+        decided = qs.filter(
+            updated_at__gte=now - datetime.timedelta(days=30),
+            status__in=[Appointment.STATUS_CONFIRMED, Appointment.STATUS_DECLINED],
+        )
+        decided_count = decided.count()
+        confirmed_count = decided.filter(status=Appointment.STATUS_CONFIRMED).count()
+        acceptance_rate = round(confirmed_count / decided_count * 100) if decided_count else None
+
+        return Response({
+            'appointments_this_month': this_month,
+            'appointments_last_month': last_month,
+            'pending_count': pending,
+            'total_patients': total_patients,
+            'acceptance_rate': acceptance_rate,
+        })

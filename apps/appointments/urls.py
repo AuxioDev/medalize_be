@@ -20,4 +20,9 @@ urlpatterns = [
     path('doctor/appointments/<uuid:pk>/', views.DoctorAppointmentDetailView.as_view(), name='doctor-appointment-detail'),
     path('doctor/appointments/<uuid:pk>/status/', views.DoctorAppointmentStatusView.as_view(), name='doctor-appointment-status'),
     path('doctor/appointments/<uuid:pk>/notes/', views.DoctorAppointmentNotesView.as_view(), name='doctor-appointment-notes'),
+    # Doctor stats
+    path('doctor/stats/', views.DoctorStatsView.as_view(), name='doctor-stats'),
+    # Waitlist
+    path('waitlist/', views.WaitlistView.as_view(), name='waitlist'),
+    path('waitlist/<uuid:pk>/', views.WaitlistDetailView.as_view(), name='waitlist-detail'),
 ]
