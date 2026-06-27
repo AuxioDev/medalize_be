@@ -3,7 +3,7 @@ import datetime
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Avg, Q
+from django.db.models import Avg, Count, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
@@ -39,6 +39,10 @@ class DoctorListView(APIView):
             .filter(role=User.ROLE_DOCTOR, doctor_profile__is_verified=True)
             .select_related('doctor_profile')
             .prefetch_related('workplaces')
+            .annotate(
+                avg_rating=Avg('doctor_reviews__rating'),
+                total_reviews=Count('doctor_reviews', distinct=True),
+            )
             .order_by('first_name', 'last_name', 'id')
         )
         name = request.query_params.get('name', '').strip()
@@ -55,9 +59,7 @@ class DoctorListView(APIView):
         if min_rating:
             try:
                 min_rating_val = float(min_rating)
-                qs = qs.annotate(avg_rating=Avg('doctor_reviews__rating')).filter(
-                    avg_rating__gte=min_rating_val
-                )
+                qs = qs.filter(avg_rating__gte=min_rating_val)
             except ValueError:
                 pass
 
@@ -456,25 +458,36 @@ class DoctorAppointmentStatusView(APIView):
         except Appointment.DoesNotExist:
             raise NotFound()
 
-        if appointment.status != Appointment.STATUS_PENDING:
-            return Response(
-                {'code': 'conflict', 'message': 'Only pending appointments can be confirmed or declined.'},
-                status=status.HTTP_409_CONFLICT,
-            )
-
         serializer = AppointmentStatusSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_status = serializer.validated_data['status']
+
+        if new_status in (Appointment.STATUS_CONFIRMED, Appointment.STATUS_DECLINED):
+            if appointment.status != Appointment.STATUS_PENDING:
+                return Response(
+                    {'code': 'conflict', 'message': 'Only pending appointments can be confirmed or declined.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+        elif new_status == Appointment.STATUS_COMPLETED:
+            if appointment.status != Appointment.STATUS_CONFIRMED:
+                return Response(
+                    {'code': 'conflict', 'message': 'Only confirmed appointments can be marked as completed.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         appointment.status = new_status
         appointment.save(update_fields=['status', 'updated_at'])
 
         try:
-            from apps.notifications.tasks import send_booking_confirmed, send_booking_cancelled
+            from apps.notifications.tasks import (
+                send_booking_confirmed, send_booking_cancelled, send_appointment_completed,
+            )
             if new_status == Appointment.STATUS_CONFIRMED:
                 send_booking_confirmed.delay(str(appointment.id))
-            else:
+            elif new_status == Appointment.STATUS_DECLINED:
                 send_booking_cancelled.delay(str(appointment.id))
+            elif new_status == Appointment.STATUS_COMPLETED:
+                send_appointment_completed.delay(str(appointment.id))
         except Exception:
             pass
 

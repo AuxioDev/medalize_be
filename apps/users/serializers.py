@@ -134,8 +134,11 @@ class MeSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         data['user_id'] = str(data['user_id'])
         request = self.context.get('request')
-        if instance.avatar and request:
-            data['avatar_url'] = request.build_absolute_uri(instance.avatar.url)
+        if instance.avatar:
+            url = instance.avatar.url
+            if request and not url.startswith(('http://', 'https://')):
+                url = request.build_absolute_uri(url)
+            data['avatar_url'] = url
         else:
             data['avatar_url'] = None
 

@@ -122,7 +122,7 @@ REST_FRAMEWORK = {
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=60),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
@@ -176,6 +176,10 @@ CELERY_TIMEZONE = 'UTC'
 CELERY_BEAT_SCHEDULE = {
     'send-appointment-reminders': {
         'task': 'apps.notifications.tasks.send_appointment_reminders',
+        'schedule': timedelta(minutes=30),
+    },
+    'auto-complete-past-appointments': {
+        'task': 'apps.notifications.tasks.auto_complete_past_appointments',
         'schedule': timedelta(minutes=30),
     },
 }

@@ -117,6 +117,7 @@ class AppointmentStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[
         Appointment.STATUS_CONFIRMED,
         Appointment.STATUS_DECLINED,
+        Appointment.STATUS_COMPLETED,
     ])
 
 
@@ -215,11 +216,16 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
         return {'id': str(wp.id), 'name': wp.name, 'city': wp.city, 'address': wp.address}
 
     def get_average_rating(self, obj):
+        if hasattr(obj, 'avg_rating'):
+            result = obj.avg_rating
+            return round(result, 1) if result is not None else None
         from django.db.models import Avg
         result = obj.doctor_reviews.aggregate(avg=Avg('rating'))['avg']
         return round(result, 1) if result is not None else None
 
     def get_review_count(self, obj):
+        if hasattr(obj, 'total_reviews'):
+            return obj.total_reviews
         return obj.doctor_reviews.count()
 
     def get_consultation_fee(self, obj):

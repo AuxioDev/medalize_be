@@ -270,3 +270,46 @@ def send_appointment_reminders():
         _send_email('Appointment Reminder — Medalize', doctor_msg, appt.doctor.email)
         _send_push(appt.patient, 'Appointment Reminder', patient_msg)
         _send_push(appt.doctor, 'Appointment Reminder', doctor_msg)
+
+
+@shared_task
+def send_appointment_completed(appointment_id):
+    from apps.appointments.models import Appointment
+    from .models import Notification
+    try:
+        appt = Appointment.objects.select_related('doctor', 'patient').get(pk=appointment_id)
+    except Appointment.DoesNotExist:
+        return
+
+    doctor_name = f'Dr. {appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
+    msg = f'Your appointment with {doctor_name} is complete. Leave a review to help others!'
+
+    Notification.objects.create(
+        user=appt.patient,
+        appointment=appt,
+        type=Notification.TYPE_GENERAL,
+        title='Appointment Complete',
+        message=msg,
+    )
+    _send_email('Appointment Complete — Medalize', msg, appt.patient.email)
+    _send_push(appt.patient, 'Appointment Complete', msg)
+
+
+@shared_task
+def auto_complete_past_appointments():
+    """Marks confirmed appointments whose end time has passed as completed."""
+    from apps.appointments.models import Appointment
+    now = timezone.now()
+    ids = list(
+        Appointment.objects
+        .filter(status=Appointment.STATUS_CONFIRMED, ends_at__lte=now)
+        .values_list('id', flat=True)
+    )
+    if not ids:
+        return
+    Appointment.objects.filter(id__in=ids).update(
+        status=Appointment.STATUS_COMPLETED,
+        updated_at=now,
+    )
+    for appt_id in ids:
+        send_appointment_completed.delay(str(appt_id))

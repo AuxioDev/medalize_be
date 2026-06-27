@@ -220,7 +220,7 @@ class AvatarUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
 
-    def put(self, request):
+    def post(self, request):
         file = request.FILES.get('avatar')
         if not file:
             raise ValidationError({'avatar': 'No file provided.'})
@@ -242,9 +242,11 @@ class AvatarUploadView(APIView):
         request.user.avatar = file
         request.user.save(update_fields=['avatar'])
 
-        avatar_url = (
-            request.build_absolute_uri(request.user.avatar.url)
-            if request.user.avatar
-            else None
-        )
+        if request.user.avatar:
+            url = request.user.avatar.url
+            if not url.startswith(('http://', 'https://')):
+                url = request.build_absolute_uri(url)
+            avatar_url = url
+        else:
+            avatar_url = None
         return Response({'avatar_url': avatar_url})
