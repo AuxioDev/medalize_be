@@ -51,6 +51,17 @@ class DoctorProfileAdmin(admin.ModelAdmin):
     list_filter = ['is_verified', 'onboarding_complete']
     search_fields = ['user__email', 'specialization', 'license_number']
     readonly_fields = ['user']
+    actions = ['verify_doctors', 'unverify_doctors']
+
+    @admin.action(description='Verify selected doctors')
+    def verify_doctors(self, request, queryset):
+        updated = queryset.filter(is_verified=False).update(is_verified=True)
+        self.message_user(request, f'{updated} doctor(s) verified.')
+
+    @admin.action(description='Unverify selected doctors')
+    def unverify_doctors(self, request, queryset):
+        updated = queryset.filter(is_verified=True).update(is_verified=False)
+        self.message_user(request, f'{updated} doctor(s) unverified.')
 
 
 @admin.register(PatientProfile)
