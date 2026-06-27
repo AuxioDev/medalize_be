@@ -115,7 +115,7 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
         model = DoctorProfile
         fields = [
             'specialization', 'specialization_display', 'license_number', 'bio',
-            'slot_duration_min',
+            'slot_duration_min', 'consultation_fee',
         ]
 
 
@@ -133,6 +133,11 @@ class MeSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['user_id'] = str(data['user_id'])
+        request = self.context.get('request')
+        if instance.avatar and request:
+            data['avatar_url'] = request.build_absolute_uri(instance.avatar.url)
+        else:
+            data['avatar_url'] = None
 
         if instance.role == User.ROLE_DOCTOR:
             try:

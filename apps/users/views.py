@@ -100,14 +100,14 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = MeSerializer(request.user)
+        serializer = MeSerializer(request.user, context={'request': request})
         return Response(serializer.data)
 
     def patch(self, request):
-        serializer = MeSerializer(request.user, data=request.data, partial=True)
+        serializer = MeSerializer(request.user, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(MeSerializer(request.user).data)
+        return Response(MeSerializer(request.user, context={'request': request}).data)
 
 
 class PatientProfileView(APIView):
