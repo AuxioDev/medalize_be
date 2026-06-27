@@ -45,3 +45,19 @@ class NotificationReadView(APIView):
         notif.is_read = True
         notif.save(update_fields=['is_read'])
         return Response(NotificationSerializer(notif).data)
+
+    def delete(self, request, pk):
+        try:
+            notif = Notification.objects.get(pk=pk, user=request.user)
+        except Notification.DoesNotExist:
+            raise NotFound()
+        notif.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NotificationReadAllView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        updated = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({'marked_read': updated})

@@ -239,3 +239,15 @@ STORAGES = {
         'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'
     },
 }
+
+# Firebase Admin SDK for FCM push notifications.
+# Set FIREBASE_CREDENTIALS_JSON to the path of your serviceAccountKey.json,
+# or leave empty to disable push notifications (emails + in-app still work).
+FIREBASE_CREDENTIALS_JSON = env('FIREBASE_CREDENTIALS_JSON', default='')
+
+if FIREBASE_CREDENTIALS_JSON:
+    import firebase_admin
+    from firebase_admin import credentials as fb_credentials
+    if not firebase_admin._apps:
+        _fb_cred = fb_credentials.Certificate(FIREBASE_CREDENTIALS_JSON)
+        firebase_admin.initialize_app(_fb_cred)

@@ -17,6 +17,31 @@ def _send_email(subject, message, recipient_email):
         pass
 
 
+def _send_push(user, title, body):
+    """Send FCM push to all registered tokens for user. No-op if Firebase not configured."""
+    if not getattr(settings, 'FIREBASE_CREDENTIALS_JSON', ''):
+        return
+    try:
+        from firebase_admin import messaging
+        from .models import FCMToken
+        tokens = list(FCMToken.objects.filter(user=user).values_list('token', flat=True))
+        if not tokens:
+            return
+        notification = messaging.Notification(title=title, body=body)
+        msg = messaging.MulticastMessage(notification=notification, tokens=tokens)
+        resp = messaging.send_each_for_multicast(msg)
+        # Clean up invalid tokens
+        invalid = {
+            tokens[i]
+            for i, r in enumerate(resp.responses)
+            if not r.success and r.exception and 'registration-token-not-registered' in str(r.exception)
+        }
+        if invalid:
+            FCMToken.objects.filter(token__in=invalid).delete()
+    except Exception:
+        pass
+
+
 @shared_task
 def send_booking_confirmed(appointment_id):
     from apps.appointments.models import Appointment
@@ -38,6 +63,7 @@ def send_booking_confirmed(appointment_id):
         message=msg,
     )
     _send_email('Appointment Confirmed — Medalize', msg, appt.patient.email)
+    _send_push(appt.patient, 'Appointment Confirmed', msg)
 
 
 @shared_task
@@ -74,6 +100,8 @@ def send_booking_cancelled(appointment_id):
     ])
     _send_email('Appointment Cancelled — Medalize', patient_msg, appt.patient.email)
     _send_email('Appointment Cancelled — Medalize', doctor_msg, appt.doctor.email)
+    _send_push(appt.patient, 'Appointment Cancelled', patient_msg)
+    _send_push(appt.doctor, 'Appointment Cancelled', doctor_msg)
 
 
 @shared_task
@@ -103,6 +131,7 @@ def send_rescheduling_required(appointment_id):
         message=msg,
     )
     _send_email('Rescheduling Required — Medalize', msg, appt.patient.email)
+    _send_push(appt.patient, 'Rescheduling Required', msg)
 
 
 @shared_task
@@ -126,6 +155,7 @@ def send_appointment_rescheduled(appointment_id):
         message=doctor_msg,
     )
     _send_email('Appointment Rescheduled — Medalize', doctor_msg, appt.doctor.email)
+    _send_push(appt.doctor, 'Appointment Rescheduled', doctor_msg)
 
 
 @shared_task
@@ -145,6 +175,7 @@ def send_doctor_verified(user_id):
         message=msg,
     )
     _send_email('Your Medalize Account is Verified', msg, user.email)
+    _send_push(user, 'Account Verified', msg)
 
 
 @shared_task
@@ -195,6 +226,7 @@ def notify_waitlist_slot_available(doctor_id):
     ])
     for entry in waiting:
         _send_email('Slot Available — Medalize', msg, entry.patient.email)
+        _send_push(entry.patient, title, msg)
 
 
 @shared_task
@@ -236,3 +268,5 @@ def send_appointment_reminders():
         ])
         _send_email('Appointment Reminder — Medalize', patient_msg, appt.patient.email)
         _send_email('Appointment Reminder — Medalize', doctor_msg, appt.doctor.email)
+        _send_push(appt.patient, 'Appointment Reminder', patient_msg)
+        _send_push(appt.doctor, 'Appointment Reminder', doctor_msg)
