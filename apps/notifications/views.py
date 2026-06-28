@@ -31,7 +31,7 @@ class NotificationListView(APIView):
             Notification.objects
             .filter(user=request.user)
             .select_related('appointment')
-            .order_by('-created_at')
+            .order_by('-sent_at')
         )
         paginator = PageNumberPagination()
         paginator.page_size = 20

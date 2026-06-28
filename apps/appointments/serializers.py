@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.doctors.models import Workplace
-from .models import Appointment, Review
+from .models import Appointment, CANCELLATION_WINDOW_HOURS, Review
 
 User = get_user_model()
 
@@ -48,13 +48,39 @@ class AppointmentSerializer(serializers.ModelSerializer):
     doctor = DoctorBriefSerializer(read_only=True)
     patient = PatientBriefSerializer(read_only=True)
     workplace = WorkplaceBriefSerializer(read_only=True)
+    # Server-computed so the client doesn't hardcode the cancellation rule.
+    can_cancel = serializers.SerializerMethodField()
+    can_reschedule = serializers.SerializerMethodField()
 
     class Meta:
         model = Appointment
         fields = [
             'id', 'doctor', 'patient', 'workplace',
             'starts_at', 'ends_at', 'status', 'reason', 'notes', 'created_at',
+            'can_cancel', 'can_reschedule',
         ]
+
+    def _beyond_window(self, obj):
+        try:
+            hours = obj.doctor.doctor_profile.cancellation_window_hours
+        except Exception:
+            hours = CANCELLATION_WINDOW_HOURS
+        return obj.starts_at > timezone.now() + timedelta(hours=hours)
+
+    def get_can_cancel(self, obj):
+        return (
+            obj.status in (Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED)
+            and self._beyond_window(obj)
+        )
+
+    def get_can_reschedule(self, obj):
+        # The doctor explicitly asked for a new time → always reschedulable.
+        if obj.status == Appointment.STATUS_REQUIRES_RESCHEDULING:
+            return True
+        return (
+            obj.status in (Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED)
+            and self._beyond_window(obj)
+        )
 
 
 class BookingSerializer(serializers.Serializer):
@@ -118,6 +144,8 @@ class AppointmentStatusSerializer(serializers.Serializer):
         Appointment.STATUS_CONFIRMED,
         Appointment.STATUS_DECLINED,
         Appointment.STATUS_COMPLETED,
+        Appointment.STATUS_REQUIRES_RESCHEDULING,
+        Appointment.STATUS_NO_SHOW,
     ])
 
 

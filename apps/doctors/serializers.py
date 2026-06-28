@@ -4,6 +4,7 @@ from apps.users.models import DoctorProfile
 from .models import BlockedPeriod, Workplace, WorkingHours
 
 _SLOT_DURATIONS = [15, 20, 30, 45, 60]
+_CANCELLATION_WINDOWS = [1, 2, 6, 12, 24]
 
 
 class DoctorProfileWriteSerializer(serializers.ModelSerializer):
@@ -13,12 +14,22 @@ class DoctorProfileWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DoctorProfile
-        fields = ['specialization', 'license_number', 'bio', 'slot_duration_min', 'consultation_fee']
+        fields = [
+            'specialization', 'license_number', 'bio', 'slot_duration_min',
+            'consultation_fee', 'cancellation_window_hours',
+        ]
 
     def validate_slot_duration_min(self, value):
         if value not in _SLOT_DURATIONS:
             raise serializers.ValidationError(
                 'Slot duration must be one of 15, 20, 30, 45 or 60 minutes.'
+            )
+        return value
+
+    def validate_cancellation_window_hours(self, value):
+        if value not in _CANCELLATION_WINDOWS:
+            raise serializers.ValidationError(
+                'Cancellation window must be one of 1, 2, 6, 12 or 24 hours.'
             )
         return value
 
@@ -33,8 +44,8 @@ class DoctorProfileReadSerializer(serializers.ModelSerializer):
         model = DoctorProfile
         fields = [
             'specialization', 'specialization_display', 'license_number', 'bio',
-            'slot_duration_min', 'consultation_fee', 'is_verified', 'onboarding_step',
-            'onboarding_complete', 'has_diploma',
+            'slot_duration_min', 'consultation_fee', 'cancellation_window_hours',
+            'is_verified', 'onboarding_step', 'onboarding_complete', 'has_diploma',
         ]
         read_only_fields = fields
 

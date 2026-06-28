@@ -274,6 +274,58 @@ class PatientAppointmentTests(AppointmentTestBase):
         res = self.client.delete(f'{APPOINTMENTS_URL}{appt.pk}/')
         self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
 
+    def test_reschedule_from_requires_rescheduling_bypasses_2h_window(self):
+        # The doctor asked to move it, so even if the original slot is within the
+        # 2-hour window the patient must still be able to pick a new time.
+        soon = timezone.now() + datetime.timedelta(hours=1)
+        appt = self._make_appointment(
+            starts_at=soon, status=Appointment.STATUS_REQUIRES_RESCHEDULING,
+        )
+        new_time = self._future_dt(11)
+        self.as_patient()
+        res = self.client.patch(
+            f'{APPOINTMENTS_URL}{appt.pk}/reschedule/',
+            {'starts_at': new_time.isoformat()}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        appt.refresh_from_db()
+        self.assertEqual(appt.status, Appointment.STATUS_PENDING)
+
+    def test_can_cancel_flags_true_for_future_confirmed(self):
+        appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)
+        self.as_patient()
+        res = self.client.get(f'{APPOINTMENTS_URL}{appt.pk}/')
+        self.assertTrue(res.data['can_cancel'])
+        self.assertTrue(res.data['can_reschedule'])
+
+    def test_can_cancel_flag_false_within_window(self):
+        soon = timezone.now() + datetime.timedelta(hours=1)
+        appt = self._make_appointment(starts_at=soon, status=Appointment.STATUS_CONFIRMED)
+        self.as_patient()
+        res = self.client.get(f'{APPOINTMENTS_URL}{appt.pk}/')
+        self.assertFalse(res.data['can_cancel'])
+
+    def test_can_reschedule_flag_true_for_requires_rescheduling(self):
+        soon = timezone.now() + datetime.timedelta(hours=1)
+        appt = self._make_appointment(
+            starts_at=soon, status=Appointment.STATUS_REQUIRES_RESCHEDULING,
+        )
+        self.as_patient()
+        res = self.client.get(f'{APPOINTMENTS_URL}{appt.pk}/')
+        self.assertFalse(res.data['can_cancel'])
+        self.assertTrue(res.data['can_reschedule'])
+
+    def test_can_cancel_respects_per_doctor_window(self):
+        # Doctor widens the window to 24h → an appointment 5h away is no longer
+        # cancellable (would be cancellable under the default 2h window).
+        self.doctor.doctor_profile.cancellation_window_hours = 24
+        self.doctor.doctor_profile.save(update_fields=['cancellation_window_hours'])
+        in_5h = timezone.now() + datetime.timedelta(hours=5)
+        appt = self._make_appointment(starts_at=in_5h, status=Appointment.STATUS_CONFIRMED)
+        self.as_patient()
+        res = self.client.get(f'{APPOINTMENTS_URL}{appt.pk}/')
+        self.assertFalse(res.data['can_cancel'])
+
 
 class DoctorAppointmentTests(AppointmentTestBase):
     def test_doctor_list_returns_only_own(self):
@@ -323,9 +375,47 @@ class DoctorAppointmentTests(AppointmentTestBase):
         appt = self._make_appointment(status=Appointment.STATUS_PENDING)
         self.as_doctor()
         res = self.client.patch(
-            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'completed'}, format='json'
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'banana'}, format='json'
         )
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_request_reschedule_on_confirmed(self):
+        appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/',
+            {'status': 'requires_rescheduling'}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['status'], Appointment.STATUS_REQUIRES_RESCHEDULING)
+
+    def test_request_reschedule_on_pending_returns_409(self):
+        appt = self._make_appointment(status=Appointment.STATUS_PENDING)
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/',
+            {'status': 'requires_rescheduling'}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
+
+    def test_mark_no_show_on_confirmed(self):
+        appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/',
+            {'status': 'no_show'}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['status'], Appointment.STATUS_NO_SHOW)
+
+    def test_mark_no_show_on_pending_returns_409(self):
+        appt = self._make_appointment(status=Appointment.STATUS_PENDING)
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/',
+            {'status': 'no_show'}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
 
     def test_update_notes(self):
         appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)

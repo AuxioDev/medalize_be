@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
 from apps.users.permissions import IsDoctor, IsPatient
-from .models import Appointment, Review, Waitlist
+from .models import Appointment, CANCELLATION_WINDOW_HOURS, Review, Waitlist
 from .serializers import (
     AppointmentSerializer,
     AppointmentStatusSerializer,
@@ -260,9 +260,14 @@ class PatientAppointmentDetailView(APIView):
                 {'code': 'conflict', 'message': 'Only pending or confirmed appointments can be cancelled.'},
                 status=status.HTTP_409_CONFLICT,
             )
-        if appointment.starts_at <= timezone.now() + datetime.timedelta(hours=2):
+        window_hours = getattr(
+            appointment.doctor.doctor_profile, 'cancellation_window_hours',
+            CANCELLATION_WINDOW_HOURS,
+        )
+        if appointment.starts_at <= timezone.now() + datetime.timedelta(hours=window_hours):
             return Response(
-                {'code': 'conflict', 'message': 'Cannot cancel within 2 hours of appointment.'},
+                {'code': 'conflict',
+                 'message': f'Cannot cancel within {window_hours} hours of appointment.'},
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -357,14 +362,27 @@ class PatientAppointmentRescheduleView(APIView):
         except Appointment.DoesNotExist:
             raise NotFound()
 
-        if appointment.status not in [Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED]:
+        if appointment.status not in [
+            Appointment.STATUS_PENDING,
+            Appointment.STATUS_CONFIRMED,
+            Appointment.STATUS_REQUIRES_RESCHEDULING,
+        ]:
             return Response(
-                {'code': 'conflict', 'message': 'Only pending or confirmed appointments can be rescheduled.'},
+                {'code': 'conflict', 'message': 'This appointment can no longer be rescheduled.'},
                 status=status.HTTP_409_CONFLICT,
             )
-        if appointment.starts_at <= timezone.now() + datetime.timedelta(hours=2):
+        # The 2-hour cutoff guards the doctor's schedule against last-minute
+        # patient changes — but it must not block a move the doctor explicitly
+        # requested (requires_rescheduling).
+        window_hours = getattr(
+            appointment.doctor.doctor_profile, 'cancellation_window_hours',
+            CANCELLATION_WINDOW_HOURS,
+        )
+        if (appointment.status != Appointment.STATUS_REQUIRES_RESCHEDULING
+                and appointment.starts_at <= timezone.now() + datetime.timedelta(hours=window_hours)):
             return Response(
-                {'code': 'conflict', 'message': 'Cannot reschedule within 2 hours of appointment.'},
+                {'code': 'conflict',
+                 'message': f'Cannot reschedule within {window_hours} hours of appointment.'},
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -481,6 +499,19 @@ class DoctorAppointmentStatusView(APIView):
                     {'code': 'conflict', 'message': 'Only confirmed appointments can be marked as completed.'},
                     status=status.HTTP_409_CONFLICT,
                 )
+        elif new_status == Appointment.STATUS_REQUIRES_RESCHEDULING:
+            # Doctor asks the patient to pick a new time for an upcoming appt.
+            if appointment.status != Appointment.STATUS_CONFIRMED:
+                return Response(
+                    {'code': 'conflict', 'message': 'Only confirmed appointments can be marked for rescheduling.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+        elif new_status == Appointment.STATUS_NO_SHOW:
+            if appointment.status != Appointment.STATUS_CONFIRMED:
+                return Response(
+                    {'code': 'conflict', 'message': 'Only confirmed appointments can be marked as no-show.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         appointment.status = new_status
         appointment.save(update_fields=['status', 'updated_at'])
@@ -488,6 +519,7 @@ class DoctorAppointmentStatusView(APIView):
         try:
             from apps.notifications.tasks import (
                 send_booking_confirmed, send_booking_cancelled, send_appointment_completed,
+                send_rescheduling_required,
             )
             if new_status == Appointment.STATUS_CONFIRMED:
                 send_booking_confirmed.delay(str(appointment.id))
@@ -495,6 +527,8 @@ class DoctorAppointmentStatusView(APIView):
                 send_booking_cancelled.delay(str(appointment.id))
             elif new_status == Appointment.STATUS_COMPLETED:
                 send_appointment_completed.delay(str(appointment.id))
+            elif new_status == Appointment.STATUS_REQUIRES_RESCHEDULING:
+                send_rescheduling_required.delay(str(appointment.id))
         except Exception:
             pass
 

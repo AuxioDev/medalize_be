@@ -5,6 +5,11 @@ from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+# Hours before an appointment within which the patient can no longer cancel or
+# self-reschedule it. Single source of truth for the serializer (can_cancel /
+# can_reschedule flags the client reads) and the cancel/reschedule views.
+CANCELLATION_WINDOW_HOURS = 2
+
 
 class Appointment(models.Model):
     STATUS_PENDING = 'pending'
@@ -13,6 +18,7 @@ class Appointment(models.Model):
     STATUS_CANCELLED = 'cancelled'
     STATUS_COMPLETED = 'completed'
     STATUS_REQUIRES_RESCHEDULING = 'requires_rescheduling'
+    STATUS_NO_SHOW = 'no_show'
     STATUS_CHOICES = [
         (STATUS_PENDING, 'Pending'),
         (STATUS_CONFIRMED, 'Confirmed'),
@@ -20,6 +26,7 @@ class Appointment(models.Model):
         (STATUS_CANCELLED, 'Cancelled'),
         (STATUS_COMPLETED, 'Completed'),
         (STATUS_REQUIRES_RESCHEDULING, 'Requires Rescheduling'),
+        (STATUS_NO_SHOW, 'No-show'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

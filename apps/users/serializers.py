@@ -115,7 +115,7 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
         model = DoctorProfile
         fields = [
             'specialization', 'specialization_display', 'license_number', 'bio',
-            'slot_duration_min', 'consultation_fee',
+            'slot_duration_min', 'consultation_fee', 'cancellation_window_hours',
         ]
 
 

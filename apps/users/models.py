@@ -116,6 +116,9 @@ class DoctorProfile(models.Model):
     onboarding_complete = models.BooleanField(default=False)
     slot_duration_min = models.PositiveIntegerField(default=30)
     consultation_fee = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    # Hours before an appointment within which the patient can no longer cancel
+    # or self-reschedule. Drives can_cancel/can_reschedule in the API.
+    cancellation_window_hours = models.PositiveIntegerField(default=2)
 
     def __str__(self):
         return f'Dr. {self.user.email}'

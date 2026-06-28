@@ -1,0 +1,66 @@
+# Full stack for staging/testing: API + Postgres + Redis + Celery worker.
+# Setup: cp .env.example .env  (fill SECRET_KEY, JWT_SECRET_KEY) then:
+#   docker compose up --build
+#   docker compose exec web python manage.py seed_data --clear   # optional test data
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${DB_NAME:-medalize_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+
+  web:
+    build: .
+    env_file: .env
+    environment:
+      DB_HOST: db
+      REDIS_URL: redis://redis:6379/0
+    command: >-
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 3"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      DB_HOST: db
+      REDIS_URL: redis://redis:6379/0
+    command: celery -A config worker -l info
+    depends_on:
+      - db
+      - redis
+
+  # Scheduled tasks: appointment reminders, auto-complete past appointments
+  # (see CELERY_BEAT_SCHEDULE in config/settings.py).
+  beat:
+    build: .
+    env_file: .env
+    environment:
+      DB_HOST: db
+      REDIS_URL: redis://redis:6379/0
+    command: celery -A config beat -l info
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  pgdata:

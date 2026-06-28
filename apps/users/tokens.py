@@ -15,4 +15,5 @@ class MedalizeRefreshToken(RefreshToken):
             token.set_exp(lifetime=REMEMBER_ME_LIFETIME)
         else:
             token['remember_me'] = False
+            token.set_exp(lifetime=DEFAULT_REFRESH_LIFETIME)
         return token
