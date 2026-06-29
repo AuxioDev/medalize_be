@@ -1,7 +1,15 @@
-# Full stack for staging/testing: API + Postgres + Redis + Celery worker.
-# Setup: cp .env.example .env  (fill SECRET_KEY, JWT_SECRET_KEY) then:
-#   docker compose up --build
-#   docker compose exec web python manage.py seed_data --clear   # optional test data
+# Full stack: API + Postgres + Redis + Celery worker + Nginx (TLS).
+#
+# Setup on a fresh VPS:
+#   1. cp .env.example .env  (fill SECRET_KEY, JWT_SECRET_KEY, DB_PASSWORD, …)
+#   2. mkdir -p nginx/certs
+#   3. docker compose up --build -d web db redis   # start without nginx first
+#   4. certbot certonly --standalone -d yourdomain.com
+#      # Places certs in /etc/letsencrypt/live/yourdomain.com/
+#   5. ln -s /etc/letsencrypt/live/yourdomain.com/fullchain.pem nginx/certs/fullchain.pem
+#      ln -s /etc/letsencrypt/live/yourdomain.com/privkey.pem  nginx/certs/privkey.pem
+#   6. docker compose up -d nginx
+#   7. docker compose exec web python manage.py seed_data --clear   # optional test data
 services:
   db:
     image: postgres:16
@@ -19,6 +27,11 @@ services:
 
   redis:
     image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   web:
     build: .
@@ -30,13 +43,25 @@ services:
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
              gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 3"
-    ports:
-      - "8000:8000"
+    # Port 8000 is NOT exposed to the host — nginx is the only entry point.
+    # For local development without nginx, temporarily add: ports: ["8000:8000"]
     depends_on:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - web
+    restart: unless-stopped
 
   worker:
     build: .
@@ -46,8 +71,10 @@ services:
       REDIS_URL: redis://redis:6379/0
     command: celery -A config worker -l info
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # Scheduled tasks: appointment reminders, auto-complete past appointments
   # (see CELERY_BEAT_SCHEDULE in config/settings.py).

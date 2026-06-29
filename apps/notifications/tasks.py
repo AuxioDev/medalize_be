@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 from celery import shared_task
@@ -325,7 +326,7 @@ def send_appointment_reminders():
     from apps.appointments.models import Appointment
     from .models import Notification
     now = timezone.now()
-    window_end = now + timezone.timedelta(hours=1)
+    window_end = now + datetime.timedelta(hours=1)
 
     upcoming = Appointment.objects.filter(
         status=Appointment.STATUS_CONFIRMED,

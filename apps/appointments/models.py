@@ -66,6 +66,7 @@ class Appointment(models.Model):
         indexes = [
             models.Index(fields=['doctor', 'starts_at']),
             models.Index(fields=['patient', 'status']),
+            models.Index(fields=['status', 'ends_at'], name='appt_status_ends_idx'),
         ]
         ordering = ['-starts_at']
 
