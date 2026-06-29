@@ -317,43 +317,62 @@ class DoctorNextSlotView(APIView):
         except Exception:
             slot_duration = 30
 
-        today = timezone.now().date()
+        now = timezone.now()
+        today = now.date()
+        end_date = today + datetime.timedelta(days=13)
+
+        # Pre-fetch all data for the 14-day window in 3 queries instead of
+        # running up to 42 individual queries (one per day × 3 models).
+        all_wh = list(
+            WorkingHours.objects
+            .filter(workplace__doctor=doctor, is_active=True)
+            .select_related('workplace')
+        )
+        all_blocked = list(BlockedPeriod.objects.filter(
+            doctor=doctor,
+            starts_at__date__lte=end_date,
+            ends_at__date__gte=today,
+        ))
+        all_existing = list(Appointment.objects.filter(
+            doctor=doctor,
+            starts_at__date__range=(today, end_date),
+        ).exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED]))
+
+        delta = datetime.timedelta(minutes=slot_duration)
+
         for days_ahead in range(14):
             check_date = today + datetime.timedelta(days=days_ahead)
             weekday = check_date.weekday()
-            wh_qs = WorkingHours.objects.filter(
-                workplace__doctor=doctor, weekday=weekday, is_active=True
-            )
-            if not wh_qs.exists():
+
+            day_whs = [wh for wh in all_wh if wh.weekday == weekday]
+            if not day_whs:
                 continue
 
-            for wh in wh_qs:
+            day_existing = [a for a in all_existing if a.starts_at.date() == check_date]
+            day_blocked_all = [
+                bp for bp in all_blocked
+                if bp.starts_at.date() <= check_date <= bp.ends_at.date()
+            ]
+
+            for wh in day_whs:
                 day_start = timezone.make_aware(
                     datetime.datetime.combine(check_date, wh.start_time)
                 )
                 day_end = timezone.make_aware(
                     datetime.datetime.combine(check_date, wh.end_time)
                 )
-                delta = datetime.timedelta(minutes=slot_duration)
-                current = max(day_start, timezone.now())
-
-                blocked = list(BlockedPeriod.objects.filter(
-                    doctor=doctor,
-                    starts_at__date__lte=check_date,
-                    ends_at__date__gte=check_date,
-                ).filter(Q(workplace=wh.workplace) | Q(workplace__isnull=True)))
-
-                existing = list(Appointment.objects.filter(
-                    doctor=doctor,
-                    starts_at__date=check_date,
-                ).exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED]))
+                current = max(day_start, now)
+                wh_blocked = [
+                    bp for bp in day_blocked_all
+                    if bp.workplace_id is None or bp.workplace_id == wh.workplace_id
+                ]
 
                 while current + delta <= day_end:
                     w_end = current + delta
                     occupied = any(
-                        bp.starts_at < w_end and bp.ends_at > current for bp in blocked
+                        bp.starts_at < w_end and bp.ends_at > current for bp in wh_blocked
                     ) or any(
-                        a.starts_at < w_end and a.ends_at > current for a in existing
+                        a.starts_at < w_end and a.ends_at > current for a in day_existing
                     )
                     if not occupied:
                         return Response({'next_available_date': check_date.isoformat()})

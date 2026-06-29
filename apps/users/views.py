@@ -160,29 +160,36 @@ class PasswordResetRequestView(APIView):
 
         try:
             user = User.objects.get(email=email)
-            # Invalidate any previous unused OTPs for this user
-            user.password_reset_otps.filter(used=False).update(used=True)
 
-            otp_code = f'{secrets.randbelow(1_000_000):06d}'
-            PasswordResetOTP.objects.create(
-                user=user,
-                code_hash=make_password(otp_code),
-                expires_at=timezone.now() + _OTP_LIFETIME,
-            )
-            try:
-                send_mail(
-                    subject='Your Medalize Password Reset Code',
-                    message=(
-                        f'Your password reset code is: {otp_code}\n\n'
-                        'This code expires in 10 minutes. '
-                        'If you did not request this, you can safely ignore this email.'
-                    ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=False,
+            # Cooldown: skip creation if an OTP already exists that was issued
+            # less than 60 s ago (expires_at > now + 9 min ⟺ created_at > now - 1 min).
+            if not user.password_reset_otps.filter(
+                used=False,
+                expires_at__gt=timezone.now() + timedelta(minutes=9),
+            ).exists():
+                # Invalidate any previous unused OTPs for this user
+                user.password_reset_otps.filter(used=False).update(used=True)
+
+                otp_code = f'{secrets.randbelow(1_000_000):06d}'
+                PasswordResetOTP.objects.create(
+                    user=user,
+                    code_hash=make_password(otp_code),
+                    expires_at=timezone.now() + _OTP_LIFETIME,
                 )
-            except Exception:
-                logger.exception('Failed to send password reset email')
+                try:
+                    send_mail(
+                        subject='Your Medalize Password Reset Code',
+                        message=(
+                            f'Your password reset code is: {otp_code}\n\n'
+                            'This code expires in 10 minutes. '
+                            'If you did not request this, you can safely ignore this email.'
+                        ),
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[user.email],
+                        fail_silently=False,
+                    )
+                except Exception:
+                    logger.exception('Failed to send password reset email')
         except User.DoesNotExist:
             pass
 
