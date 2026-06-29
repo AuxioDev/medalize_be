@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -11,6 +12,8 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+logger = logging.getLogger(__name__)
 
 from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
 from apps.users.permissions import IsDoctor, IsPatient
@@ -225,7 +228,7 @@ class PatientAppointmentListCreateView(APIView):
             from apps.notifications.tasks import send_new_booking_pending
             send_new_booking_pending.delay(str(appointment.pk))
         except Exception:
-            pass
+            logger.exception('Failed to enqueue booking notification for appointment %s', appointment.pk)
         return Response(
             AppointmentSerializer(
                 Appointment.objects.select_related(
@@ -278,7 +281,7 @@ class PatientAppointmentDetailView(APIView):
             from apps.notifications.tasks import send_booking_cancelled
             send_booking_cancelled.delay(str(appointment.id))
         except Exception:
-            pass
+            logger.exception('Failed to enqueue cancellation notification for appointment %s', appointment.id)
 
         cache.delete(
             f'slots:{appointment.doctor_id}:{appointment.workplace_id}'
@@ -420,7 +423,7 @@ class PatientAppointmentRescheduleView(APIView):
             from apps.notifications.tasks import send_appointment_rescheduled
             send_appointment_rescheduled.delay(str(appointment.id))
         except Exception:
-            pass
+            logger.exception('Failed to enqueue reschedule notification for appointment %s', appointment.id)
 
         return Response(AppointmentSerializer(appointment).data)
 
@@ -530,7 +533,7 @@ class DoctorAppointmentStatusView(APIView):
             elif new_status == Appointment.STATUS_REQUIRES_RESCHEDULING:
                 send_rescheduling_required.delay(str(appointment.id))
         except Exception:
-            pass
+            logger.exception('Failed to enqueue status notification for appointment %s', appointment.id)
 
         return Response(AppointmentSerializer(appointment).data)
 
@@ -634,13 +637,9 @@ class WaitlistDetailView(APIView):
 
 
 class DoctorStatsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
 
     def get(self, request):
-        from apps.users.permissions import IsDoctor
-        if request.user.role != request.user.ROLE_DOCTOR:
-            return Response(status=status.HTTP_403_FORBIDDEN)
-
         now = timezone.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         last_month_end = month_start

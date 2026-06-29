@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -80,6 +81,10 @@ class BlockedPeriod(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     reason = models.TextField(blank=True)
+
+    def clean(self):
+        if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
+            raise ValidationError({'ends_at': 'End time must be after start time.'})
 
     class Meta:
         ordering = ['starts_at']

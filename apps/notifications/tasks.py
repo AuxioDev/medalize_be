@@ -1,7 +1,11 @@
+import logging
+
 from celery import shared_task
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 def _send_email(subject, message, recipient_email):
@@ -11,10 +15,10 @@ def _send_email(subject, message, recipient_email):
             message=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[recipient_email],
-            fail_silently=True,
+            fail_silently=False,
         )
     except Exception:
-        pass
+        logger.exception('Failed to send email to %s', recipient_email)
 
 
 def _send_push(user, title, body, data=None):
@@ -42,7 +46,7 @@ def _send_push(user, title, body, data=None):
         if invalid:
             FCMToken.objects.filter(token__in=invalid).delete()
     except Exception:
-        pass
+        logger.exception('Failed to send push notification to user %s', user.pk)
 
 
 @shared_task

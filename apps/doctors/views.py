@@ -1,6 +1,9 @@
 import datetime
+import logging
 
 from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
@@ -242,7 +245,7 @@ class BlockedPeriodListCreateView(APIView):
                 from apps.notifications.tasks import notify_blocked_period_patients
                 notify_blocked_period_patients.delay(str(period.id))
             except Exception:
-                pass
+                logger.exception('Failed to enqueue blocked period notification for period %s', period.id)
 
         return Response(BlockedPeriodSerializer(period).data, status=status.HTTP_201_CREATED)
 

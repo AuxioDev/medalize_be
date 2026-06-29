@@ -256,6 +256,8 @@ FIREBASE_CREDENTIALS_JSON = env('FIREBASE_CREDENTIALS_JSON', default='')
 if FIREBASE_CREDENTIALS_JSON:
     import firebase_admin
     from firebase_admin import credentials as fb_credentials
-    if not firebase_admin._apps:
+    try:
+        firebase_admin.get_app()
+    except ValueError:
         _fb_cred = fb_credentials.Certificate(FIREBASE_CREDENTIALS_JSON)
         firebase_admin.initialize_app(_fb_cred)

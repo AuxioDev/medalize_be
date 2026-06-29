@@ -1,9 +1,14 @@
+import logging
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+logger = logging.getLogger(__name__)
 
 # Hours before an appointment within which the patient can no longer cancel or
 # self-reschedule it. Single source of truth for the serializer (can_cancel /
@@ -48,6 +53,10 @@ class Appointment(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=STATUS_PENDING)
+
+    def clean(self):
+        if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
+            raise ValidationError({'ends_at': 'End time must be after start time.'})
     reason = models.TextField(blank=True)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -80,7 +89,7 @@ def notify_waitlist_on_cancellation(sender, instance, created, **kwargs):
             from apps.notifications.tasks import notify_waitlist_slot_available
             notify_waitlist_slot_available.delay(str(instance.doctor_id))
         except Exception:
-            pass
+            logger.exception('Failed to dispatch waitlist notification for appointment %s', instance.pk)
 
 
 class Waitlist(models.Model):
@@ -122,7 +131,7 @@ class Review(models.Model):
         on_delete=models.CASCADE,
         related_name='patient_reviews',
     )
-    rating = models.PositiveSmallIntegerField()
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

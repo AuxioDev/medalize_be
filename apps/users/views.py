@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import timedelta
 from io import BytesIO
@@ -8,6 +9,8 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 from PIL import Image
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -165,17 +168,20 @@ class PasswordResetRequestView(APIView):
                 code_hash=make_password(otp_code),
                 expires_at=timezone.now() + _OTP_LIFETIME,
             )
-            send_mail(
-                subject='Your Medalize Password Reset Code',
-                message=(
-                    f'Your password reset code is: {otp_code}\n\n'
-                    'This code expires in 10 minutes. '
-                    'If you did not request this, you can safely ignore this email.'
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=True,
-            )
+            try:
+                send_mail(
+                    subject='Your Medalize Password Reset Code',
+                    message=(
+                        f'Your password reset code is: {otp_code}\n\n'
+                        'This code expires in 10 minutes. '
+                        'If you did not request this, you can safely ignore this email.'
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                    fail_silently=False,
+                )
+            except Exception:
+                logger.exception('Failed to send password reset email')
         except User.DoesNotExist:
             pass
 

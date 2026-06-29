@@ -1,8 +1,12 @@
+import logging
 import uuid
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+logger = logging.getLogger(__name__)
 
 
 def diploma_storage():
@@ -115,7 +119,10 @@ class DoctorProfile(models.Model):
     onboarding_step = models.PositiveIntegerField(default=1)
     onboarding_complete = models.BooleanField(default=False)
     slot_duration_min = models.PositiveIntegerField(default=30)
-    consultation_fee = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    consultation_fee = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(0)],
+    )
     # Hours before an appointment within which the patient can no longer cancel
     # or self-reschedule. Drives can_cancel/can_reschedule in the API.
     cancellation_window_hours = models.PositiveIntegerField(default=2)
@@ -171,4 +178,4 @@ def notify_doctor_verified(sender, instance, created, **kwargs):
             from apps.notifications.tasks import send_doctor_verified
             send_doctor_verified.delay(instance.user_id)
         except Exception:
-            pass
+            logger.exception('Failed to dispatch verification notification for doctor %s', instance.user_id)
