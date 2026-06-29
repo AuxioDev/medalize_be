@@ -16,6 +16,7 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from .permissions import IsPatient
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
@@ -114,7 +115,7 @@ class MeView(APIView):
 
 
 class PatientProfileView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
 
     def get(self, request):
         profile, _ = PatientProfile.objects.get_or_create(user=request.user)

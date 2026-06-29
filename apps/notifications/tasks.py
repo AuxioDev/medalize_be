@@ -75,6 +75,31 @@ def send_booking_confirmed(appointment_id):
 
 
 @shared_task
+def send_booking_declined(appointment_id):
+    from apps.appointments.models import Appointment
+    from .models import Notification
+    try:
+        appt = Appointment.objects.select_related('doctor', 'patient').get(pk=appointment_id)
+    except Appointment.DoesNotExist:
+        return
+
+    doctor_name = f'Dr. {appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
+    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
+    msg = f'Your appointment request with {doctor_name} on {date_str} has been declined.'
+
+    Notification.objects.create(
+        user=appt.patient,
+        appointment=appt,
+        type=Notification.TYPE_CANCELLED,
+        title='Appointment Declined',
+        message=msg,
+    )
+    _send_email('Appointment Declined — Medalize', msg, appt.patient.email)
+    _send_push(appt.patient, 'Appointment Declined', msg,
+               data={'type': 'appointment', 'appointment_id': str(appt.id)})
+
+
+@shared_task
 def send_booking_cancelled(appointment_id):
     from apps.appointments.models import Appointment
     from .models import Notification
@@ -121,9 +146,6 @@ def send_rescheduling_required(appointment_id):
         appt = Appointment.objects.select_related('doctor', 'patient').get(pk=appointment_id)
     except Appointment.DoesNotExist:
         return
-
-    appt.status = Appointment.STATUS_REQUIRES_RESCHEDULING
-    appt.save(update_fields=['status', 'updated_at'])
 
     doctor_name = f'{appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
     date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
@@ -207,8 +229,15 @@ def notify_blocked_period_patients(blocked_period_id):
     if bp.workplace:
         affected = affected.filter(workplace=bp.workplace)
 
-    for appt in affected:
-        send_rescheduling_required.delay(str(appt.id))
+    now = timezone.now()
+    ids = list(affected.values_list('id', flat=True))
+    # Set status in bulk here — send_rescheduling_required only sends the notification.
+    Appointment.objects.filter(id__in=ids).update(
+        status=Appointment.STATUS_REQUIRES_RESCHEDULING,
+        updated_at=now,
+    )
+    for appt_id in ids:
+        send_rescheduling_required.delay(str(appt_id))
 
 
 @shared_task

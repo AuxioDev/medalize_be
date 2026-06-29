@@ -220,6 +220,11 @@ class PatientAppointmentListCreateView(APIView):
 
             appointment = serializer.save()
 
+        # Remove from waitlist — patient found a slot, no longer needs to wait.
+        Waitlist.objects.filter(
+            patient=appointment.patient, doctor=appointment.doctor
+        ).delete()
+
         cache.delete(
             f'slots:{appointment.doctor_id}:{appointment.workplace_id}'
             f':{appointment.starts_at.date()}'
@@ -399,6 +404,36 @@ class PatientAppointmentRescheduleView(APIView):
             slot_duration = 30
         new_ends_at = new_starts_at + datetime.timedelta(minutes=slot_duration)
 
+        # Validate against the doctor's working hours for the new slot.
+        local_starts = timezone.localtime(new_starts_at)
+        weekday = local_starts.weekday()
+        try:
+            wh = WorkingHours.objects.get(
+                workplace=appointment.workplace, weekday=weekday, is_active=True
+            )
+        except WorkingHours.DoesNotExist:
+            raise ValidationError(
+                {'starts_at': 'The doctor does not work on this day at this location.'}
+            )
+        day_start = timezone.make_aware(
+            datetime.datetime.combine(local_starts.date(), wh.start_time)
+        )
+        day_end = timezone.make_aware(
+            datetime.datetime.combine(local_starts.date(), wh.end_time)
+        )
+        if not (day_start <= new_starts_at and new_ends_at <= day_end):
+            raise ValidationError(
+                {'starts_at': "This slot is outside the doctor's working hours."}
+            )
+
+        # Validate against blocked periods.
+        if BlockedPeriod.objects.filter(
+            doctor=appointment.doctor,
+            starts_at__lt=new_ends_at,
+            ends_at__gt=new_starts_at,
+        ).filter(Q(workplace=appointment.workplace) | Q(workplace__isnull=True)).exists():
+            raise ValidationError({'starts_at': 'This slot is not available.'})
+
         with transaction.atomic():
             overlap = (
                 Appointment.objects
@@ -420,8 +455,12 @@ class PatientAppointmentRescheduleView(APIView):
         cache.delete(f'slots:{appointment.doctor_id}:{appointment.workplace_id}:{new_starts_at.date()}')
 
         try:
-            from apps.notifications.tasks import send_appointment_rescheduled
+            from apps.notifications.tasks import (
+                send_appointment_rescheduled, notify_waitlist_slot_available,
+            )
             send_appointment_rescheduled.delay(str(appointment.id))
+            # Old slot is now free — notify waitlist patients.
+            notify_waitlist_slot_available.delay(str(appointment.doctor_id))
         except Exception:
             logger.exception('Failed to enqueue reschedule notification for appointment %s', appointment.id)
 
@@ -538,7 +577,10 @@ class DoctorAppointmentStatusView(APIView):
             )
             if new_status == Appointment.STATUS_CONFIRMED:
                 send_booking_confirmed.delay(str(appointment.id))
-            elif new_status in (Appointment.STATUS_DECLINED, Appointment.STATUS_CANCELLED):
+            elif new_status == Appointment.STATUS_DECLINED:
+                from apps.notifications.tasks import send_booking_declined
+                send_booking_declined.delay(str(appointment.id))
+            elif new_status == Appointment.STATUS_CANCELLED:
                 send_booking_cancelled.delay(str(appointment.id))
             elif new_status == Appointment.STATUS_COMPLETED:
                 send_appointment_completed.delay(str(appointment.id))
@@ -607,7 +649,7 @@ class DoctorReviewListView(APIView):
 
 
 class WaitlistView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
 
     def get(self, request):
         entries = Waitlist.objects.filter(patient=request.user).select_related('doctor')
@@ -637,7 +679,7 @@ class WaitlistView(APIView):
 
 
 class WaitlistDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
 
     def delete(self, request, pk):
         try:

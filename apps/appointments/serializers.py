@@ -53,13 +53,14 @@ class AppointmentSerializer(serializers.ModelSerializer):
     # Server-computed so the client doesn't hardcode the cancellation rule.
     can_cancel = serializers.SerializerMethodField()
     can_reschedule = serializers.SerializerMethodField()
+    has_review = serializers.SerializerMethodField()
 
     class Meta:
         model = Appointment
         fields = [
             'id', 'doctor', 'patient', 'workplace',
             'starts_at', 'ends_at', 'status', 'reason', 'notes', 'created_at',
-            'can_cancel', 'can_reschedule',
+            'can_cancel', 'can_reschedule', 'has_review',
         ]
 
     def _beyond_window(self, obj):
@@ -83,6 +84,12 @@ class AppointmentSerializer(serializers.ModelSerializer):
             obj.status in (Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED)
             and self._beyond_window(obj)
         )
+
+    def get_has_review(self, obj):
+        try:
+            return obj.review is not None
+        except Exception:
+            return False
 
 
 class BookingSerializer(serializers.Serializer):

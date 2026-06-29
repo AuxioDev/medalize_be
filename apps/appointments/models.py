@@ -84,7 +84,8 @@ def notify_waitlist_on_cancellation(sender, instance, created, **kwargs):
     if created:
         return
     original = getattr(instance, '_original_status', None)
-    if original not in (None, Appointment.STATUS_CANCELLED) and instance.status == Appointment.STATUS_CANCELLED:
+    freed = {Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED}
+    if original not in (None, *freed) and instance.status in freed:
         try:
             from apps.notifications.tasks import notify_waitlist_slot_available
             notify_waitlist_slot_available.delay(str(instance.doctor_id))
