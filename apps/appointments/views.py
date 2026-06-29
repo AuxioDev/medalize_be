@@ -190,6 +190,7 @@ class PatientAppointmentListCreateView(APIView):
             Appointment.objects
             .filter(patient=request.user)
             .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+            .order_by('-starts_at')
         )
         status_filter = request.query_params.get('status', '').strip()
         if status_filter:
@@ -710,7 +711,7 @@ class DoctorStatsView(APIView):
         total_patients = qs.values('patient').distinct().count()
 
         decided = qs.filter(
-            updated_at__gte=now - datetime.timedelta(days=30),
+            updated_at__gte=month_start,
             status__in=[Appointment.STATUS_CONFIRMED, Appointment.STATUS_DECLINED],
         )
         decided_count = decided.count()
