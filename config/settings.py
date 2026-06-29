@@ -117,6 +117,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/minute',
@@ -124,6 +125,7 @@ REST_FRAMEWORK = {
         'login': '10/minute',
         'register': '5/minute',
         'password_reset': '3/minute',
+        'fcm_register': '20/hour',
     },
 }
 
@@ -168,6 +170,7 @@ CACHES = {
         # (cache.delete_pattern) when a doctor changes hours or blocked periods.
         'BACKEND': 'django_redis.cache.RedisCache',
         'LOCATION': REDIS_URL,
+        'KEY_PREFIX': 'medalize',
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         },
@@ -192,6 +195,7 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
 if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000

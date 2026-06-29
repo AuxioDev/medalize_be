@@ -236,9 +236,11 @@ class AvatarUploadView(APIView):
         # Validate actual file bytes — content_type is user-controlled and can be spoofed.
         try:
             img = Image.open(BytesIO(file.read()))
-            img.verify()
             if img.format not in ('JPEG', 'PNG'):
                 raise ValidationError({'avatar': 'Only JPEG or PNG files are allowed.'})
+            # Force full pixel decode — verify() only checks the header and
+            # would pass specially crafted files that fail on actual decode.
+            img.load()
         except ValidationError:
             raise
         except Exception:

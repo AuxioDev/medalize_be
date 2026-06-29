@@ -223,8 +223,14 @@ class ReviewCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError('Reviews can only be left for completed appointments.')
         if appointment.patient != self.context['request'].user:
             raise serializers.ValidationError('You can only review your own appointments.')
-        if hasattr(appointment, 'review'):
+        # hasattr on a OneToOne reverse accessor is unreliable because
+        # RelatedObjectDoesNotExist may or may not subclass AttributeError
+        # depending on the Django version. Use explicit try/except instead.
+        try:
+            appointment.review  # type: ignore[attr-defined]
             raise serializers.ValidationError('You have already reviewed this appointment.')
+        except Review.DoesNotExist:
+            pass
         return attrs
 
     def create(self, validated_data):

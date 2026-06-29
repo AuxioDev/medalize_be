@@ -9,14 +9,26 @@ from .models import FCMToken, Notification
 from .serializers import FCMTokenSerializer, NotificationSerializer
 
 
+_FCM_TOKEN_LIMIT = 10
+
+
 class FCMTokenView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'fcm_register'
 
     def post(self, request):
         serializer = FCMTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         token = serializer.validated_data['token']
         _, created = FCMToken.objects.get_or_create(user=request.user, token=token)
+
+        if created:
+            # FIFO eviction: keep only the _FCM_TOKEN_LIMIT most recent tokens
+            user_tokens = FCMToken.objects.filter(user=request.user).order_by('-created_at')
+            excess_ids = list(user_tokens.values_list('id', flat=True)[_FCM_TOKEN_LIMIT:])
+            if excess_ids:
+                FCMToken.objects.filter(id__in=excess_ids).delete()
+
         return Response(
             {'message': 'Token registered.'},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,

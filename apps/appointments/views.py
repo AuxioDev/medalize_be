@@ -161,8 +161,12 @@ class SlotListView(APIView):
             starts_at__date=requested_date,
         ).exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED]))
 
+        now = timezone.now()
         free = []
         for w_start, w_end in windows:
+            # Drop already-passed slots when querying today
+            if requested_date == now.date() and w_start <= now:
+                continue
             occupied = any(
                 bp.starts_at < w_end and bp.ends_at > w_start
                 for bp in blocked
