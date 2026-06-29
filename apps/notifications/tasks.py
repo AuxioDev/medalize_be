@@ -176,18 +176,56 @@ def send_appointment_rescheduled(appointment_id):
         return
 
     patient_name = f'{appt.patient.first_name} {appt.patient.last_name}'.strip() or appt.patient.email
+    doctor_name = f'Dr. {appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
     date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-    doctor_msg = f'{patient_name} rescheduled their appointment to {date_str}.'
+    doctor_msg = f'{patient_name} rescheduled their appointment to {date_str}. Please confirm.'
+    patient_msg = f'Your appointment with {doctor_name} has been rescheduled to {date_str}. Awaiting confirmation.'
+
+    push_data = {'type': 'appointment', 'appointment_id': str(appt.id)}
+    Notification.objects.bulk_create([
+        Notification(
+            user=appt.doctor,
+            appointment=appt,
+            type=Notification.TYPE_GENERAL,
+            title='Appointment Rescheduled',
+            message=doctor_msg,
+        ),
+        Notification(
+            user=appt.patient,
+            appointment=appt,
+            type=Notification.TYPE_GENERAL,
+            title='Appointment Rescheduled',
+            message=patient_msg,
+        ),
+    ])
+    _send_email('Appointment Rescheduled — Medalize', doctor_msg, appt.doctor.email)
+    _send_email('Appointment Rescheduled — Medalize', patient_msg, appt.patient.email)
+    _send_push(appt.doctor, 'Appointment Rescheduled', doctor_msg, data=push_data)
+    _send_push(appt.patient, 'Appointment Rescheduled', patient_msg, data=push_data)
+
+
+@shared_task
+def send_booking_no_show(appointment_id):
+    from apps.appointments.models import Appointment
+    from .models import Notification
+    try:
+        appt = Appointment.objects.select_related('doctor', 'patient').get(pk=appointment_id)
+    except Appointment.DoesNotExist:
+        return
+
+    doctor_name = f'Dr. {appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
+    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
+    msg = f'You were marked as a no-show for your appointment with {doctor_name} on {date_str}.'
 
     Notification.objects.create(
-        user=appt.doctor,
+        user=appt.patient,
         appointment=appt,
         type=Notification.TYPE_GENERAL,
-        title='Appointment Rescheduled',
-        message=doctor_msg,
+        title='Missed Appointment',
+        message=msg,
     )
-    _send_email('Appointment Rescheduled — Medalize', doctor_msg, appt.doctor.email)
-    _send_push(appt.doctor, 'Appointment Rescheduled', doctor_msg,
+    _send_email('Missed Appointment — Medalize', msg, appt.patient.email)
+    _send_push(appt.patient, 'Missed Appointment', msg,
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
@@ -242,7 +280,7 @@ def notify_blocked_period_patients(blocked_period_id):
 
 @shared_task
 def notify_waitlist_slot_available(doctor_id):
-    from apps.appointments.models import Waitlist
+    from apps.appointments.models import Appointment, Waitlist
     from apps.users.models import User
     from .models import Notification
     try:
@@ -254,7 +292,19 @@ def notify_waitlist_slot_available(doctor_id):
     msg = f'A slot has opened up with {doctor_name}. Book your appointment now.'
     title = 'New Slot Available'
 
-    waiting = Waitlist.objects.filter(doctor=doctor).select_related('patient')
+    # Exclude patients who already have an active appointment with this doctor.
+    existing_patient_ids = set(
+        Appointment.objects.filter(
+            doctor=doctor,
+            status__in=[Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED],
+        ).values_list('patient_id', flat=True)
+    )
+    waiting = (
+        Waitlist.objects
+        .filter(doctor=doctor)
+        .exclude(patient_id__in=existing_patient_ids)
+        .select_related('patient')
+    )
     Notification.objects.bulk_create([
         Notification(
             user=entry.patient,

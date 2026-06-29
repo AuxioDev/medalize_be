@@ -572,13 +572,12 @@ class DoctorAppointmentStatusView(APIView):
 
         try:
             from apps.notifications.tasks import (
-                send_booking_confirmed, send_booking_cancelled, send_appointment_completed,
-                send_rescheduling_required,
+                send_booking_confirmed, send_booking_cancelled, send_booking_declined,
+                send_booking_no_show, send_appointment_completed, send_rescheduling_required,
             )
             if new_status == Appointment.STATUS_CONFIRMED:
                 send_booking_confirmed.delay(str(appointment.id))
             elif new_status == Appointment.STATUS_DECLINED:
-                from apps.notifications.tasks import send_booking_declined
                 send_booking_declined.delay(str(appointment.id))
             elif new_status == Appointment.STATUS_CANCELLED:
                 send_booking_cancelled.delay(str(appointment.id))
@@ -586,6 +585,8 @@ class DoctorAppointmentStatusView(APIView):
                 send_appointment_completed.delay(str(appointment.id))
             elif new_status == Appointment.STATUS_REQUIRES_RESCHEDULING:
                 send_rescheduling_required.delay(str(appointment.id))
+            elif new_status == Appointment.STATUS_NO_SHOW:
+                send_booking_no_show.delay(str(appointment.id))
         except Exception:
             logger.exception('Failed to enqueue status notification for appointment %s', appointment.id)
 
@@ -669,7 +670,9 @@ class WaitlistView(APIView):
         if not doctor_id:
             raise ValidationError({'doctor_id': 'This field is required.'})
         try:
-            doctor = User.objects.get(pk=doctor_id, role=User.ROLE_DOCTOR)
+            doctor = User.objects.get(
+                pk=doctor_id, role=User.ROLE_DOCTOR, doctor_profile__is_verified=True
+            )
         except (User.DoesNotExist, ValueError):
             raise NotFound('Doctor not found.')
         entry, created = Waitlist.objects.get_or_create(patient=request.user, doctor=doctor)
