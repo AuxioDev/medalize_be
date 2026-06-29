@@ -496,6 +496,12 @@ class DoctorAppointmentStatusView(APIView):
                     {'code': 'conflict', 'message': 'Only pending appointments can be confirmed or declined.'},
                     status=status.HTTP_409_CONFLICT,
                 )
+        elif new_status == Appointment.STATUS_CANCELLED:
+            if appointment.status not in (Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED):
+                return Response(
+                    {'code': 'conflict', 'message': 'Only pending or confirmed appointments can be cancelled.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
         elif new_status == Appointment.STATUS_COMPLETED:
             if appointment.status != Appointment.STATUS_CONFIRMED:
                 return Response(
@@ -519,6 +525,12 @@ class DoctorAppointmentStatusView(APIView):
         appointment.status = new_status
         appointment.save(update_fields=['status', 'updated_at'])
 
+        if new_status == Appointment.STATUS_CANCELLED:
+            cache.delete(
+                f'slots:{appointment.doctor_id}:{appointment.workplace_id}'
+                f':{appointment.starts_at.date()}'
+            )
+
         try:
             from apps.notifications.tasks import (
                 send_booking_confirmed, send_booking_cancelled, send_appointment_completed,
@@ -526,7 +538,7 @@ class DoctorAppointmentStatusView(APIView):
             )
             if new_status == Appointment.STATUS_CONFIRMED:
                 send_booking_confirmed.delay(str(appointment.id))
-            elif new_status == Appointment.STATUS_DECLINED:
+            elif new_status in (Appointment.STATUS_DECLINED, Appointment.STATUS_CANCELLED):
                 send_booking_cancelled.delay(str(appointment.id))
             elif new_status == Appointment.STATUS_COMPLETED:
                 send_appointment_completed.delay(str(appointment.id))

@@ -1,11 +1,13 @@
+import datetime
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
-from apps.doctors.models import Workplace
+from apps.doctors.models import BlockedPeriod, WorkingHours, Workplace
 from .models import Appointment, CANCELLATION_WINDOW_HOURS, Review
 
 User = get_user_model()
@@ -97,7 +99,7 @@ class BookingSerializer(serializers.Serializer):
     def validate(self, attrs):
         try:
             doctor = User.objects.select_related('doctor_profile').get(
-                pk=attrs['doctor_id'], role='doctor'
+                pk=attrs['doctor_id'], role='doctor', doctor_profile__is_verified=True
             )
         except User.DoesNotExist:
             raise serializers.ValidationError({'doctor_id': 'Doctor not found.'})
@@ -112,12 +114,41 @@ class BookingSerializer(serializers.Serializer):
         except Exception:
             slot_duration = 30
 
-        ends_at = attrs['starts_at'] + timedelta(minutes=slot_duration)
+        starts_at = attrs['starts_at']
+        ends_at = starts_at + timedelta(minutes=slot_duration)
+
+        # Validate against the doctor's working hours for this weekday/workplace.
+        local_starts = timezone.localtime(starts_at)
+        weekday = local_starts.weekday()
+        try:
+            wh = WorkingHours.objects.get(workplace=workplace, weekday=weekday, is_active=True)
+        except WorkingHours.DoesNotExist:
+            raise serializers.ValidationError(
+                {'starts_at': 'The doctor does not work on this day at this location.'}
+            )
+        day_start = timezone.make_aware(
+            datetime.datetime.combine(local_starts.date(), wh.start_time)
+        )
+        day_end = timezone.make_aware(
+            datetime.datetime.combine(local_starts.date(), wh.end_time)
+        )
+        if not (day_start <= starts_at and ends_at <= day_end):
+            raise serializers.ValidationError(
+                {'starts_at': "This slot is outside the doctor's working hours."}
+            )
+
+        # Validate against blocked periods.
+        if BlockedPeriod.objects.filter(
+            doctor=doctor,
+            starts_at__lt=ends_at,
+            ends_at__gt=starts_at,
+        ).filter(Q(workplace=workplace) | Q(workplace__isnull=True)).exists():
+            raise serializers.ValidationError({'starts_at': 'This slot is not available.'})
 
         overlap = Appointment.objects.filter(
             doctor=doctor,
             starts_at__lt=ends_at,
-            ends_at__gt=attrs['starts_at'],
+            ends_at__gt=starts_at,
         ).exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED])
 
         if overlap.exists():
@@ -143,6 +174,7 @@ class AppointmentStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[
         Appointment.STATUS_CONFIRMED,
         Appointment.STATUS_DECLINED,
+        Appointment.STATUS_CANCELLED,
         Appointment.STATUS_COMPLETED,
         Appointment.STATUS_REQUIRES_RESCHEDULING,
         Appointment.STATUS_NO_SHOW,

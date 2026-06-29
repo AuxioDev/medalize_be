@@ -2,6 +2,7 @@ import datetime
 import logging
 
 from django.core.cache import cache
+from django.db.models.deletion import ProtectedError
 
 logger = logging.getLogger(__name__)
 from django.db import transaction
@@ -131,7 +132,13 @@ class WorkplaceDetailView(APIView):
                 {'code': 'conflict', 'message': 'Workplace has upcoming confirmed appointments.'},
                 status=status.HTTP_409_CONFLICT,
             )
-        workplace.delete()
+        try:
+            workplace.delete()
+        except ProtectedError:
+            return Response(
+                {'code': 'conflict', 'message': 'Workplace has historical appointments and cannot be deleted.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         _invalidate_doctor_slots(request.user.id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
