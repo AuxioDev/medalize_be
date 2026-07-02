@@ -144,6 +144,14 @@ class BookingSerializer(serializers.Serializer):
                 {'starts_at': "This slot is outside the doctor's working hours."}
             )
 
+        # Require the start to land on the doctor's slot grid so clients can't
+        # book off-grid times (e.g. 09:07) that straddle two published slots.
+        offset_minutes = (starts_at - day_start).total_seconds() / 60
+        if offset_minutes < 0 or offset_minutes % slot_duration != 0:
+            raise serializers.ValidationError(
+                {'starts_at': 'Selected time is not a valid appointment slot.'}
+            )
+
         # Validate against blocked periods.
         if BlockedPeriod.objects.filter(
             doctor=doctor,

@@ -40,6 +40,22 @@ User = get_user_model()
 _OTP_LIFETIME = timedelta(minutes=10)
 
 
+def _revoke_all_sessions(user):
+    """Blacklist every outstanding refresh token for a user.
+
+    Called on password change/reset so that a credential change terminates all
+    other sessions (OWASP ASVS V3.3). Access tokens are short-lived (15 min) and
+    expire on their own; blacklisting refresh tokens stops them being renewed.
+    """
+    from rest_framework_simplejwt.token_blacklist.models import (
+        BlacklistedToken,
+        OutstandingToken,
+    )
+
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
+
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [RegisterRateThrottle]
@@ -138,13 +154,9 @@ class PasswordChangeView(APIView):
         request.user.set_password(serializer.validated_data['new_password'])
         request.user.save()
 
-        # Blacklist the provided refresh token so all existing sessions are revoked
-        refresh_token = request.data.get('refresh')
-        if refresh_token:
-            try:
-                RefreshToken(refresh_token).blacklist()
-            except TokenError:
-                pass
+        # Revoke every outstanding session, not just the token in this request,
+        # so a password change fully logs out other devices.
+        _revoke_all_sessions(request.user)
 
         return Response({'message': 'Password changed successfully.'})
 
@@ -226,6 +238,9 @@ class PasswordResetConfirmView(APIView):
             locked_otp.save(update_fields=['used'])
             user.set_password(new_password)
             user.save()
+            # A reset is the account-recovery path — terminate any sessions an
+            # attacker may already hold.
+            _revoke_all_sessions(user)
 
         return Response({'message': 'Password reset successful.'})
 
@@ -255,8 +270,15 @@ class AvatarUploadView(APIView):
         finally:
             file.seek(0)
 
+        # Remove the previous avatar so replaced files don't accumulate in storage.
+        old_avatar = request.user.avatar
         request.user.avatar = file
         request.user.save(update_fields=['avatar'])
+        if old_avatar and old_avatar.name and old_avatar.name != request.user.avatar.name:
+            try:
+                old_avatar.delete(save=False)
+            except Exception:
+                logger.warning('Failed to delete replaced avatar %s', old_avatar.name)
 
         if request.user.avatar:
             url = request.user.avatar.url

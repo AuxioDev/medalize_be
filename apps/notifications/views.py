@@ -20,19 +20,37 @@ class FCMTokenView(APIView):
         serializer = FCMTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         token = serializer.validated_data['token']
-        _, created = FCMToken.objects.get_or_create(user=request.user, token=token)
+        # Key on the globally-unique token and (re)assign ownership to the current
+        # user. get_or_create(user, token) raises IntegrityError when the same
+        # device token is already registered to another account (shared device /
+        # account switch) and would keep delivering the previous user's pushes to
+        # the new owner.
+        _, created = FCMToken.objects.update_or_create(
+            token=token, defaults={'user': request.user}
+        )
 
-        if created:
-            # FIFO eviction: keep only the _FCM_TOKEN_LIMIT most recent tokens
-            user_tokens = FCMToken.objects.filter(user=request.user).order_by('-created_at')
-            excess_ids = list(user_tokens.values_list('id', flat=True)[_FCM_TOKEN_LIMIT:])
-            if excess_ids:
-                FCMToken.objects.filter(id__in=excess_ids).delete()
+        # FIFO eviction: keep only the _FCM_TOKEN_LIMIT most recent tokens.
+        user_tokens = FCMToken.objects.filter(user=request.user).order_by('-created_at')
+        excess_ids = list(user_tokens.values_list('id', flat=True)[_FCM_TOKEN_LIMIT:])
+        if excess_ids:
+            FCMToken.objects.filter(id__in=excess_ids).delete()
 
         return Response(
             {'message': 'Token registered.'},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+    def delete(self, request):
+        """De-register a device token so pushes stop going to a device that is no
+        longer signed in. Called by the client on logout."""
+        token = request.data.get('token')
+        if not token:
+            return Response(
+                {'code': 'validation_error', 'errors': {'token': ['This field is required.']}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        FCMToken.objects.filter(user=request.user, token=token).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class NotificationListView(APIView):

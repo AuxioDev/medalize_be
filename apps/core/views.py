@@ -38,7 +38,6 @@ def health_check(request):
         {
             'status': 'degraded' if degraded else 'ok',
             'version': settings.SPECTACULAR_SETTINGS.get('VERSION', '1.0.0'),
-            'environment': 'development' if settings.DEBUG else 'production',
             'checks': checks,
         },
         status=status.HTTP_503_SERVICE_UNAVAILABLE if degraded else status.HTTP_200_OK,

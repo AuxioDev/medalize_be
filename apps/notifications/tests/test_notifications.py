@@ -80,6 +80,27 @@ class FCMTokenTests(NotificationAuthTestCase):
         res = self.client.post(FCM_URL, {'token': 'x'}, format='json')
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_register_token_owned_by_other_user_reassigns_without_error(self):
+        # Same device token previously registered under another account (shared
+        # device / account switch). Must reassign ownership, not 500 on the
+        # global unique constraint.
+        other = User.objects.create_user(
+            email='other@test.com', password='Pass1234', role='patient',
+            first_name='O', last_name='T',
+        )
+        FCMToken.objects.create(user=other, token='shared-device-token')
+        res = self.client.post(FCM_URL, {'token': 'shared-device-token'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        token = FCMToken.objects.get(token='shared-device-token')
+        self.assertEqual(token.user, self.user)
+        self.assertEqual(FCMToken.objects.filter(token='shared-device-token').count(), 1)
+
+    def test_delete_token_deregisters_device(self):
+        self.client.post(FCM_URL, {'token': 'fcm-token-abc'}, format='json')
+        res = self.client.delete(FCM_URL, {'token': 'fcm-token-abc'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(FCMToken.objects.filter(token='fcm-token-abc').exists())
+
 
 class NotificationListTests(NotificationAuthTestCase):
     def test_list_returns_200_and_only_own(self):

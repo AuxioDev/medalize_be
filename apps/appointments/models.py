@@ -2,9 +2,12 @@ import logging
 import uuid
 
 from django.conf import settings
+from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import DateTimeRangeField, RangeOperators
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import F, Func, Q
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -69,6 +72,30 @@ class Appointment(models.Model):
             models.Index(fields=['status', 'ends_at'], name='appt_status_ends_idx'),
         ]
         ordering = ['-starts_at']
+        constraints = [
+            # Database-level guarantee against double-booking: two active
+            # (non-cancelled/declined) appointments for the same doctor may not
+            # have overlapping [starts_at, ends_at) ranges. Backstops the
+            # application-level row lock in the booking/reschedule views and
+            # closes the READ COMMITTED phantom-insert race. Requires the
+            # btree_gist extension (added in the accompanying migration).
+            ExclusionConstraint(
+                name='appt_no_overlap_per_doctor',
+                expressions=[
+                    ('doctor', RangeOperators.EQUAL),
+                    (
+                        Func(
+                            F('starts_at'),
+                            F('ends_at'),
+                            function='TSTZRANGE',
+                            output_field=DateTimeRangeField(),
+                        ),
+                        RangeOperators.OVERLAPS,
+                    ),
+                ],
+                condition=~Q(status__in=['cancelled', 'declined']),
+            ),
+        ]
 
     @classmethod
     def from_db(cls, db, field_names, values):

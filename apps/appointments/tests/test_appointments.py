@@ -216,6 +216,42 @@ class BookingTests(AppointmentTestBase):
         res = self.client.post(APPOINTMENTS_URL, self._booking_payload(), format='json')
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_booking_offgrid_time_returns_400(self):
+        # 11:15 is not a multiple of the 30-min slot grid from 09:00 → rejected.
+        self.as_patient()
+        res = self.client.post(
+            APPOINTMENTS_URL,
+            self._booking_payload(starts_at=self._future_dt(11, 15).isoformat()),
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ConcurrencySafetyTests(AppointmentTestBase):
+    def test_db_rejects_overlapping_active_appointments(self):
+        from django.db import IntegrityError, transaction
+        self._make_appointment(
+            starts_at=self._future_dt(10), status=Appointment.STATUS_CONFIRMED
+        )
+        # Direct insert bypassing the view — the exclusion constraint must still
+        # block a second active appointment overlapping the same doctor's slot.
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self._make_appointment(
+                    starts_at=self._future_dt(10, 15), status=Appointment.STATUS_PENDING
+                )
+
+    def test_db_allows_overlap_when_other_is_cancelled(self):
+        from django.db import transaction
+        self._make_appointment(
+            starts_at=self._future_dt(10), status=Appointment.STATUS_CANCELLED
+        )
+        with transaction.atomic():
+            appt = self._make_appointment(
+                starts_at=self._future_dt(10), status=Appointment.STATUS_PENDING
+            )
+        self.assertEqual(appt.status, Appointment.STATUS_PENDING)
+
 
 class PatientAppointmentTests(AppointmentTestBase):
     def test_list_returns_only_own(self):

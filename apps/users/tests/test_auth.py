@@ -393,3 +393,82 @@ class SpecializationsTests(AuthTestCase):
         self.assertIn('cardiology', values)
         self.assertIn('gastroenterology', values)
         self.assertEqual(len(values), 18)
+
+
+class PasswordChangeSessionTests(AuthTestCase):
+    CHANGE_URL = '/api/auth/password/change/'
+
+    def _login(self):
+        cache.clear()
+        res = self.client.post(
+            LOGIN_URL, {'email': 'patient@test.com', 'password': 'Pass1234'}, format='json'
+        )
+        cache.clear()
+        return res.data
+
+    def setUp(self):
+        super().setUp()
+        self.client.post(REGISTER_URL, patient_payload(), format='json')
+        cache.clear()
+
+    def test_password_change_revokes_other_sessions(self):
+        session1 = self._login()
+        session2 = self._login()
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {session1["access"]}')
+        res = self.client.post(
+            self.CHANGE_URL,
+            {'old_password': 'Pass1234', 'new_password': 'NewPass1234', 'refresh': session1['refresh']},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        # The unrelated session's refresh token must now be blacklisted.
+        cache.clear()
+        self.client.credentials()
+        refresh_res = self.client.post(REFRESH_URL, {'refresh': session2['refresh']}, format='json')
+        self.assertEqual(refresh_res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PasswordResetOTPLockoutTests(AuthTestCase):
+    CONFIRM_URL = '/api/auth/password/reset/confirm/'
+
+    def _make_otp(self, code='123456'):
+        from datetime import timedelta
+        from django.contrib.auth.hashers import make_password
+        from django.utils import timezone
+        from apps.users.models import PasswordResetOTP
+
+        user = User.objects.create_user(
+            email='reset@test.com', password='Pass1234', role='patient',
+            first_name='R', last_name='T',
+        )
+        return user, PasswordResetOTP.objects.create(
+            user=user, code_hash=make_password(code),
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+
+    def test_otp_retired_after_max_attempts(self):
+        from apps.users.models import PasswordResetOTP
+
+        _, otp = self._make_otp(code='123456')
+        for _ in range(PasswordResetOTP.MAX_ATTEMPTS):
+            cache.clear()
+            res = self.client.post(
+                self.CONFIRM_URL,
+                {'email': 'reset@test.com', 'code': '000000', 'new_password': 'NewPass1234'},
+                format='json',
+            )
+            self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        otp.refresh_from_db()
+        self.assertTrue(otp.used)
+
+        # Even the correct code is now rejected — the OTP is spent.
+        cache.clear()
+        res = self.client.post(
+            self.CONFIRM_URL,
+            {'email': 'reset@test.com', 'code': '123456', 'new_password': 'NewPass1234'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)

@@ -1,8 +1,10 @@
 import datetime
 import logging
+from io import BytesIO
 
 from django.core.cache import cache
 from django.db.models.deletion import ProtectedError
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 from django.db import transaction
@@ -352,15 +354,36 @@ class DiplomaUploadView(APIView):
         file = request.FILES.get('diploma')
         if not file:
             raise ValidationError({'diploma': 'No file provided.'})
-        # Any file type is accepted (images, PDF, documents, …). A 10 MB size cap
-        # is kept; uploads are stored on the configured backend (Cloudinary in
-        # production, local media in development).
         if file.size > 10 * 1024 * 1024:
             raise ValidationError({'diploma': 'File size must not exceed 10 MB.'})
 
+        # Validate the real file bytes — content_type/extension are client-controlled.
+        # Only PDF and JPEG/PNG are accepted so malicious HTML/SVG/scripts can't be
+        # stored and later served to admins reviewing diplomas.
+        header = file.read(8)
+        file.seek(0)
+        if not header.startswith(b'%PDF-'):
+            try:
+                img = Image.open(BytesIO(file.read()))
+                if img.format not in ('JPEG', 'PNG'):
+                    raise ValidationError({'diploma': 'Only PDF, JPEG or PNG files are allowed.'})
+                img.load()
+            except ValidationError:
+                raise
+            except Exception:
+                raise ValidationError({'diploma': 'Only PDF, JPEG or PNG files are allowed.'})
+            finally:
+                file.seek(0)
+
         profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
+        old_diploma = profile.diploma_file
         profile.diploma_file = file
         profile.save(update_fields=['diploma_file'])
+        if old_diploma and old_diploma.name and old_diploma.name != profile.diploma_file.name:
+            try:
+                old_diploma.delete(save=False)
+            except Exception:
+                logger.warning('Failed to delete replaced diploma %s', old_diploma.name)
 
         diploma_url = (
             request.build_absolute_uri(profile.diploma_file.url)

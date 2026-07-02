@@ -9,10 +9,32 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 environ.Env.read_env(BASE_DIR / '.env')
 
 SECRET_KEY = env('SECRET_KEY')
-if len(SECRET_KEY) < 50:
-    from django.core.exceptions import ImproperlyConfigured
-    raise ImproperlyConfigured('SECRET_KEY must be at least 50 characters. Generate one with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"')
 DEBUG = env('DEBUG')
+JWT_SECRET_KEY = env('JWT_SECRET_KEY')
+
+
+def _validate_secret(name, value):
+    from django.core.exceptions import ImproperlyConfigured
+
+    if len(value) < 50:
+        raise ImproperlyConfigured(
+            f'{name} must be at least 50 characters. Generate one with: '
+            'python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"'
+        )
+    # The `django-insecure-` prefix is Django's throwaway dev default and must
+    # never reach production, even though it satisfies the length check above.
+    if not DEBUG and value.startswith('django-insecure-'):
+        raise ImproperlyConfigured(
+            f'{name} uses the insecure Django development default. Set a unique, random secret for production.'
+        )
+
+
+_validate_secret('SECRET_KEY', SECRET_KEY)
+_validate_secret('JWT_SECRET_KEY', JWT_SECRET_KEY)
+if not DEBUG and JWT_SECRET_KEY == SECRET_KEY:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured('JWT_SECRET_KEY must be different from SECRET_KEY.')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
 INSTALLED_APPS = [
@@ -22,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.postgres',
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -137,7 +160,7 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': env('JWT_SECRET_KEY'),
+    'SIGNING_KEY': JWT_SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'TOKEN_OBTAIN_SERIALIZER': 'apps.users.serializers.CustomTokenObtainPairSerializer',
     'USER_ID_FIELD': 'id',
@@ -192,6 +215,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     'auto-complete-past-appointments': {
         'task': 'apps.notifications.tasks.auto_complete_past_appointments',
+        'schedule': timedelta(minutes=30),
+    },
+    'expire-stale-pending-appointments': {
+        'task': 'apps.notifications.tasks.expire_stale_pending_appointments',
         'schedule': timedelta(minutes=30),
     },
 }

@@ -18,8 +18,13 @@ class HealthCheckTests(APITestCase):
         res = self.client.get(HEALTH_URL)
         self.assertIn('status', res.data)
         self.assertIn('version', res.data)
-        self.assertIn('environment', res.data)
         self.assertIn('checks', res.data)
+
+    def test_health_does_not_disclose_environment(self):
+        # The public, unauthenticated health endpoint must not reveal whether the
+        # deployment is running in debug/production (recon hardening).
+        res = self.client.get(HEALTH_URL)
+        self.assertNotIn('environment', res.data)
 
     def test_health_db_check_is_ok(self):
         res = self.client.get(HEALTH_URL)
@@ -28,11 +33,6 @@ class HealthCheckTests(APITestCase):
     def test_health_version_matches_settings(self):
         res = self.client.get(HEALTH_URL)
         self.assertEqual(res.data['version'], settings.SPECTACULAR_SETTINGS['VERSION'])
-
-    def test_health_environment_reflects_debug(self):
-        res = self.client.get(HEALTH_URL)
-        expected = 'development' if settings.DEBUG else 'production'
-        self.assertEqual(res.data['environment'], expected)
 
     def test_health_requires_no_auth(self):
         # No credentials set — must still return 200

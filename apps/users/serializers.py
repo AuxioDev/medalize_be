@@ -1,6 +1,7 @@
 import re
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password, make_password
+from django.db.models import F
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenObtainSerializer
@@ -215,7 +216,16 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         # Always call check_password (even when otp is None) so response time
         # is constant regardless of whether an OTP exists — prevents timing attacks.
         code_hash = otp.code_hash if otp is not None else _DUMMY_OTP_HASH
-        if otp is None or not check_password(attrs['code'], code_hash):
+        valid = check_password(attrs['code'], code_hash)
+
+        if otp is None or not valid:
+            if otp is not None:
+                # Count the failed guess and retire the code once the per-account
+                # attempt cap is reached, so a leaked/guessable code can't be
+                # brute-forced across rotating IPs.
+                PasswordResetOTP.objects.filter(pk=otp.pk).update(attempts=F('attempts') + 1)
+                if otp.attempts + 1 >= PasswordResetOTP.MAX_ATTEMPTS:
+                    PasswordResetOTP.objects.filter(pk=otp.pk).update(used=True)
             raise serializers.ValidationError({'code': 'Invalid or expired code.'})
 
         attrs['user'] = user

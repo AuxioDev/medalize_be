@@ -3,7 +3,7 @@ import logging
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q
 from django.utils import timezone
 from rest_framework import status
@@ -213,17 +213,25 @@ class PatientAppointmentListCreateView(APIView):
         starts_at = serializer.validated_data['starts_at']
         ends_at = serializer.validated_data['_ends_at']
 
-        with transaction.atomic():
-            overlap = (
-                Appointment.objects
-                .select_for_update()
-                .filter(doctor=doctor, starts_at__lt=ends_at, ends_at__gt=starts_at)
-                .exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED])
-            )
-            if overlap.exists():
-                raise ValidationError({'starts_at': 'This slot is no longer available.'})
+        try:
+            with transaction.atomic():
+                # Lock the doctor row so concurrent bookings for the same doctor
+                # serialize. select_for_update on the (possibly empty) overlap
+                # query alone locks nothing under READ COMMITTED and would let two
+                # requests both pass the check and insert the same slot.
+                User.objects.select_for_update().get(pk=doctor.pk)
+                overlap = (
+                    Appointment.objects
+                    .filter(doctor=doctor, starts_at__lt=ends_at, ends_at__gt=starts_at)
+                    .exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED])
+                )
+                if overlap.exists():
+                    raise ValidationError({'starts_at': 'This slot is no longer available.'})
 
-            appointment = serializer.save()
+                appointment = serializer.save()
+        except IntegrityError:
+            # DB exclusion constraint backstop (appt_no_overlap_per_doctor).
+            raise ValidationError({'starts_at': 'This slot is no longer available.'})
 
         # Remove from waitlist — patient found a slot, no longer needs to wait.
         Waitlist.objects.filter(
@@ -450,6 +458,13 @@ class PatientAppointmentRescheduleView(APIView):
                 {'starts_at': "This slot is outside the doctor's working hours."}
             )
 
+        # Require the new start to align to the doctor's slot grid.
+        offset_minutes = (new_starts_at - day_start).total_seconds() / 60
+        if offset_minutes < 0 or offset_minutes % slot_duration != 0:
+            raise ValidationError(
+                {'starts_at': 'Selected time is not a valid appointment slot.'}
+            )
+
         # Validate against blocked periods.
         if BlockedPeriod.objects.filter(
             doctor=appointment.doctor,
@@ -458,22 +473,27 @@ class PatientAppointmentRescheduleView(APIView):
         ).filter(Q(workplace=appointment.workplace) | Q(workplace__isnull=True)).exists():
             raise ValidationError({'starts_at': 'This slot is not available.'})
 
-        with transaction.atomic():
-            overlap = (
-                Appointment.objects
-                .select_for_update()
-                .filter(doctor=appointment.doctor, starts_at__lt=new_ends_at, ends_at__gt=new_starts_at)
-                .exclude(pk=appointment.pk)
-                .exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED])
-            )
-            if overlap.exists():
-                raise ValidationError({'starts_at': 'This slot is no longer available.'})
+        try:
+            with transaction.atomic():
+                # Lock the doctor row so this move serializes against concurrent
+                # bookings/reschedules for the same doctor (see booking view).
+                User.objects.select_for_update().get(pk=appointment.doctor_id)
+                overlap = (
+                    Appointment.objects
+                    .filter(doctor=appointment.doctor, starts_at__lt=new_ends_at, ends_at__gt=new_starts_at)
+                    .exclude(pk=appointment.pk)
+                    .exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED])
+                )
+                if overlap.exists():
+                    raise ValidationError({'starts_at': 'This slot is no longer available.'})
 
-            old_date = appointment.starts_at.date()
-            appointment.starts_at = new_starts_at
-            appointment.ends_at = new_ends_at
-            appointment.status = Appointment.STATUS_PENDING
-            appointment.save(update_fields=['starts_at', 'ends_at', 'status', 'updated_at'])
+                old_date = appointment.starts_at.date()
+                appointment.starts_at = new_starts_at
+                appointment.ends_at = new_ends_at
+                appointment.status = Appointment.STATUS_PENDING
+                appointment.save(update_fields=['starts_at', 'ends_at', 'status', 'updated_at'])
+        except IntegrityError:
+            raise ValidationError({'starts_at': 'This slot is no longer available.'})
 
         cache.delete(f'slots:{appointment.doctor_id}:{appointment.workplace_id}:{old_date}')
         cache.delete(f'slots:{appointment.doctor_id}:{appointment.workplace_id}:{new_starts_at.date()}')

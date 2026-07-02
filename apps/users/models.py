@@ -145,11 +145,17 @@ class PatientProfile(models.Model):
 
 
 class PasswordResetOTP(models.Model):
+    # Number of wrong-code guesses after which the OTP is retired, forcing the
+    # user to request a fresh code. Caps per-account brute force independently
+    # of the per-IP throttle.
+    MAX_ATTEMPTS = 5
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_otps')
     code_hash = models.CharField(max_length=128)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     used = models.BooleanField(default=False)
+    attempts = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['-created_at']

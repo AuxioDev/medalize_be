@@ -51,6 +51,20 @@ def _send_push(user, title, body, data=None):
 
 
 @shared_task
+def deliver_email_and_push(user_id, subject, title, message, data=None):
+    """Deliver a single email + push to one user. Used by fan-out tasks so each
+    recipient's (potentially slow) network I/O runs as its own job instead of
+    serializing hundreds of sends inside one worker task."""
+    from apps.users.models import User
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return
+    _send_email(subject, message, user.email)
+    _send_push(user, title, message, data=data or {})
+
+
+@shared_task
 def send_booking_confirmed(appointment_id):
     from apps.appointments.models import Appointment
     from .models import Notification
@@ -306,6 +320,7 @@ def notify_waitlist_slot_available(doctor_id):
         .exclude(patient_id__in=existing_patient_ids)
         .select_related('patient')
     )
+    waiting = list(waiting)
     Notification.objects.bulk_create([
         Notification(
             user=entry.patient,
@@ -315,10 +330,13 @@ def notify_waitlist_slot_available(doctor_id):
         )
         for entry in waiting
     ])
+    # Fan out email/push as one job per recipient so a large waitlist doesn't
+    # block the worker on serial network I/O.
+    push_data = {'type': 'doctor', 'doctor_id': str(doctor.id)}
     for entry in waiting:
-        _send_email('Slot Available — Medalize', msg, entry.patient.email)
-        _send_push(entry.patient, title, msg,
-                   data={'type': 'doctor', 'doctor_id': str(doctor.id)})
+        deliver_email_and_push.delay(
+            str(entry.patient_id), 'Slot Available — Medalize', title, msg, push_data
+        )
 
 
 @shared_task
@@ -358,10 +376,14 @@ def send_appointment_reminders():
                 message=doctor_msg,
             ),
         ])
-        _send_email('Appointment Reminder — Medalize', patient_msg, appt.patient.email)
-        _send_email('Appointment Reminder — Medalize', doctor_msg, appt.doctor.email)
-        _send_push(appt.patient, 'Appointment Reminder', patient_msg)
-        _send_push(appt.doctor, 'Appointment Reminder', doctor_msg)
+        deliver_email_and_push.delay(
+            str(appt.patient_id), 'Appointment Reminder — Medalize',
+            'Appointment Reminder', patient_msg,
+        )
+        deliver_email_and_push.delay(
+            str(appt.doctor_id), 'Appointment Reminder — Medalize',
+            'Appointment Reminder', doctor_msg,
+        )
 
 
 @shared_task
@@ -432,3 +454,24 @@ def auto_complete_past_appointments():
     )
     for appt_id in ids:
         send_appointment_completed.delay(str(appt_id))
+
+
+@shared_task
+def expire_stale_pending_appointments():
+    """Decline appointments still pending past their start time (the doctor never
+    confirmed or declined). Prevents them lingering forever and frees the slot."""
+    from apps.appointments.models import Appointment
+    now = timezone.now()
+    ids = list(
+        Appointment.objects
+        .filter(status=Appointment.STATUS_PENDING, starts_at__lte=now)
+        .values_list('id', flat=True)
+    )
+    if not ids:
+        return
+    Appointment.objects.filter(id__in=ids).update(
+        status=Appointment.STATUS_DECLINED,
+        updated_at=now,
+    )
+    for appt_id in ids:
+        send_booking_declined.delay(str(appt_id))
