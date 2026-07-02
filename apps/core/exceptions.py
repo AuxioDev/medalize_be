@@ -1,3 +1,6 @@
+import logging
+
+from django.conf import settings
 from rest_framework import status
 from rest_framework.exceptions import (
     AuthenticationFailed,
@@ -10,6 +13,8 @@ from rest_framework.exceptions import (
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 from rest_framework_simplejwt.exceptions import InvalidToken
+
+logger = logging.getLogger(__name__)
 
 
 def custom_exception_handler(exc, context):
@@ -84,6 +89,19 @@ def custom_exception_handler(exc, context):
         return Response(
             {'code': 'validation_error', 'errors': exc.detail},
             status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if response is None:
+        # DRF didn't recognise this exception — i.e. an unexpected server error.
+        # Always log it with a traceback. In production, return a consistent JSON
+        # envelope (clients can't parse Django's HTML 500 page); in DEBUG, return
+        # None so Django still renders the full traceback for developers.
+        logger.error('Unhandled exception in API request', exc_info=exc)
+        if settings.DEBUG:
+            return None
+        return Response(
+            {'code': 'server_error', 'message': 'An unexpected error occurred.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
     return response
