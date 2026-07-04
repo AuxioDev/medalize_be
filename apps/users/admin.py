@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import DoctorProfile, PatientProfile, User
+from .models import DoctorProfile, PatientProfile, SocialAccount, User, UserDevice
 
 
 class DoctorProfileInline(admin.StackedInline):
@@ -77,3 +77,19 @@ class PatientProfileAdmin(admin.ModelAdmin):
     list_display = ['user', 'blood_type', 'date_of_birth']
     search_fields = ['user__email']
     readonly_fields = ['user']
+
+
+@admin.register(SocialAccount)
+class SocialAccountAdmin(admin.ModelAdmin):
+    list_display = ['user', 'provider', 'email', 'created_at']
+    list_filter = ['provider']
+    search_fields = ['user__email', 'email', 'provider_uid']
+    readonly_fields = ['user', 'provider', 'provider_uid', 'email', 'created_at']
+
+
+@admin.register(UserDevice)
+class UserDeviceAdmin(admin.ModelAdmin):
+    list_display = ['user', 'device_name', 'platform', 'last_seen_at', 'created_at']
+    list_filter = ['platform']
+    search_fields = ['user__email', 'device_name', 'device_id']
+    readonly_fields = ['user', 'device_id', 'jti', 'created_at']

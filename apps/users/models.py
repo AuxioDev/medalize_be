@@ -144,6 +144,53 @@ class PatientProfile(models.Model):
         return f'Patient: {self.user.email}'
 
 
+class SocialAccount(models.Model):
+    PROVIDER_GOOGLE = 'google'
+    PROVIDER_APPLE = 'apple'
+    PROVIDER_CHOICES = [
+        (PROVIDER_GOOGLE, 'Google'),
+        (PROVIDER_APPLE, 'Apple'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='social_accounts')
+    provider = models.CharField(max_length=10, choices=PROVIDER_CHOICES)
+    provider_uid = models.CharField(max_length=255)
+    email = models.EmailField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('provider', 'provider_uid')
+
+    def __str__(self):
+        return f'{self.provider}:{self.user.email}'
+
+
+class UserDevice(models.Model):
+    PLATFORM_IOS = 'ios'
+    PLATFORM_ANDROID = 'android'
+    PLATFORM_CHOICES = [
+        (PLATFORM_IOS, 'iOS'),
+        (PLATFORM_ANDROID, 'Android'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices')
+    device_id = models.CharField(max_length=255)
+    device_name = models.CharField(max_length=255, blank=True)
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES, blank=True)
+    # jti of the most recent refresh token issued to this device — lets us
+    # blacklist exactly this device's session via the token_blacklist app.
+    jti = models.CharField(max_length=64, blank=True)
+    last_seen_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'device_id')
+        ordering = ['-last_seen_at']
+
+    def __str__(self):
+        return f'{self.user.email} — {self.device_name or self.device_id}'
+
+
 class PasswordResetOTP(models.Model):
     # Number of wrong-code guesses after which the OTP is retired, forcing the
     # user to request a fresh code. Caps per-account brute force independently
