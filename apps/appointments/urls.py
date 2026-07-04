@@ -25,4 +25,7 @@ urlpatterns = [
     # Waitlist
     path('waitlist/', views.WaitlistView.as_view(), name='waitlist'),
     path('waitlist/<uuid:pk>/', views.WaitlistDetailView.as_view(), name='waitlist-detail'),
+    # Favorites
+    path('favorites/', views.FavoriteListCreateView.as_view(), name='favorite-list-create'),
+    path('favorites/<uuid:doctor_id>/', views.FavoriteDetailView.as_view(), name='favorite-detail'),
 ]

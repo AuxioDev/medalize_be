@@ -4,7 +4,10 @@ import logging
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, Q
+from django.db.models import (
+    Avg, Case, Count, ExpressionWrapper, F, FloatField, Max, OuterRef, Q, Subquery, Value, When,
+)
+from django.db.models.functions import ACos, Cos, Greatest, Least, Radians, Sin
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
@@ -17,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
 from apps.users.permissions import IsDoctor, IsPatient
-from .models import Appointment, CANCELLATION_WINDOW_HOURS, Review, Waitlist
+from .models import Appointment, CANCELLATION_WINDOW_HOURS, Favorite, Review, Waitlist
 from .serializers import (
     AppointmentSerializer,
     AppointmentStatusSerializer,
@@ -33,8 +36,84 @@ from .serializers import (
 User = get_user_model()
 
 
+def find_next_slot_at(doctor):
+    """First free slot start (aware datetime) within 14 days, or None.
+
+    Shared by DoctorNextSlotView and DoctorListView (ordering=next_slot).
+    Pre-fetches all data for the window in 3 queries instead of running up
+    to 42 individual queries (one per day × 3 models).
+    """
+    try:
+        slot_duration = doctor.doctor_profile.slot_duration_min
+    except Exception:
+        slot_duration = 30
+
+    now = timezone.now()
+    today = now.date()
+    end_date = today + datetime.timedelta(days=13)
+
+    all_wh = list(
+        WorkingHours.objects
+        .filter(workplace__doctor=doctor, is_active=True)
+        .select_related('workplace')
+    )
+    all_blocked = list(BlockedPeriod.objects.filter(
+        doctor=doctor,
+        starts_at__date__lte=end_date,
+        ends_at__date__gte=today,
+    ))
+    all_existing = list(Appointment.objects.filter(
+        doctor=doctor,
+        starts_at__date__range=(today, end_date),
+    ).exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED]))
+
+    delta = datetime.timedelta(minutes=slot_duration)
+
+    for days_ahead in range(14):
+        check_date = today + datetime.timedelta(days=days_ahead)
+        weekday = check_date.weekday()
+
+        day_whs = [wh for wh in all_wh if wh.weekday == weekday]
+        if not day_whs:
+            continue
+
+        day_existing = [a for a in all_existing if a.starts_at.date() == check_date]
+        day_blocked_all = [
+            bp for bp in all_blocked
+            if bp.starts_at.date() <= check_date <= bp.ends_at.date()
+        ]
+
+        for wh in day_whs:
+            day_start = timezone.make_aware(
+                datetime.datetime.combine(check_date, wh.start_time)
+            )
+            day_end = timezone.make_aware(
+                datetime.datetime.combine(check_date, wh.end_time)
+            )
+            current = max(day_start, now)
+            wh_blocked = [
+                bp for bp in day_blocked_all
+                if bp.workplace_id is None or bp.workplace_id == wh.workplace_id
+            ]
+
+            while current + delta <= day_end:
+                w_end = current + delta
+                occupied = any(
+                    bp.starts_at < w_end and bp.ends_at > current for bp in wh_blocked
+                ) or any(
+                    a.starts_at < w_end and a.ends_at > current for a in day_existing
+                )
+                if not occupied:
+                    return current
+                current += delta
+
+    return None
+
+
 class DoctorListView(APIView):
     permission_classes = [IsAuthenticated]
+
+    ORDERING_CHOICES = ('rating', '-rating', 'next_slot', 'distance')
 
     def get(self, request):
         qs = (
@@ -52,6 +131,7 @@ class DoctorListView(APIView):
         specialization = request.query_params.get('specialization', '').strip()
         city = request.query_params.get('city', '').strip()
         min_rating = request.query_params.get('min_rating', '').strip()
+        ordering = request.query_params.get('ordering', '').strip()
 
         if name:
             qs = qs.filter(Q(first_name__icontains=name) | Q(last_name__icontains=name))
@@ -66,11 +146,77 @@ class DoctorListView(APIView):
             except ValueError:
                 pass
 
+        lat, lng = self._parse_coordinates(request, required=ordering == 'distance')
+        if lat is not None and lng is not None:
+            qs = self._annotate_distance(qs, lat, lng)
+
+        if ordering in ('rating', '-rating'):
+            direction = F('avg_rating').desc if ordering == '-rating' else F('avg_rating').asc
+            qs = qs.order_by(direction(nulls_last=True), 'first_name', 'last_name', 'id')
+        elif ordering == 'distance':
+            qs = qs.order_by(
+                F('distance_km').asc(nulls_last=True), 'first_name', 'last_name', 'id'
+            )
+
         paginator = PageNumberPagination()
         paginator.page_size = 20
         page = paginator.paginate_queryset(qs, request)
+
+        if ordering == 'next_slot':
+            # Deliberate approximation: next-slot is computed and re-sorted only
+            # within the already-paginated page, never for the whole table.
+            for doctor in page:
+                doctor.next_slot_at = find_next_slot_at(doctor)
+            page = sorted(page, key=lambda d: (d.next_slot_at is None, d.next_slot_at))
+
         return paginator.get_paginated_response(
             DoctorPublicSerializer(page, many=True, context={'request': request}).data
+        )
+
+    def _parse_coordinates(self, request, required):
+        lat = request.query_params.get('lat', '').strip()
+        lng = request.query_params.get('lng', '').strip()
+        if not lat and not lng and not required:
+            return None, None
+        try:
+            return float(lat), float(lng)
+        except ValueError:
+            if required:
+                raise ValidationError({
+                    'lat': 'ordering=distance requires valid lat and lng query parameters.'
+                })
+            return None, None
+
+    @staticmethod
+    def _annotate_distance(qs, lat, lng):
+        # Haversine on the primary workplace via plain ORM functions (no PostGIS).
+        # Workplace.Meta.ordering puts is_primary first, matching
+        # DoctorPublicSerializer.get_primary_workplace.
+        primary_wp = Workplace.objects.filter(doctor=OuterRef('pk')).order_by('-is_primary', 'name')
+        qs = qs.annotate(
+            wp_lat=Subquery(primary_wp.values('latitude')[:1], output_field=FloatField()),
+            wp_lng=Subquery(primary_wp.values('longitude')[:1], output_field=FloatField()),
+        )
+        lat_r = Radians(Value(lat, output_field=FloatField()))
+        lng_r = Radians(Value(lng, output_field=FloatField()))
+        # Clamp into [-1, 1] so float rounding can't push the value outside
+        # ACos's domain and crash the query.
+        cos_angle = Least(Value(1.0), Greatest(Value(-1.0),
+            Cos(lat_r) * Cos(Radians(F('wp_lat')))
+            * Cos(Radians(F('wp_lng')) - lng_r)
+            + Sin(lat_r) * Sin(Radians(F('wp_lat')))
+        ))
+        # GREATEST/LEAST ignore NULLs in PostgreSQL, so missing coordinates
+        # would silently clamp to -1 instead of yielding NULL — keep them NULL
+        # explicitly so those doctors sort last.
+        return qs.annotate(
+            distance_km=Case(
+                When(Q(wp_lat__isnull=True) | Q(wp_lng__isnull=True), then=Value(None)),
+                default=ExpressionWrapper(
+                    Value(6371.0) * ACos(cos_angle), output_field=FloatField()
+                ),
+                output_field=FloatField(),
+            )
         )
 
 
@@ -320,73 +466,11 @@ class DoctorNextSlotView(APIView):
         except User.DoesNotExist:
             raise NotFound()
 
-        try:
-            slot_duration = doctor.doctor_profile.slot_duration_min
-        except Exception:
-            slot_duration = 30
-
-        now = timezone.now()
-        today = now.date()
-        end_date = today + datetime.timedelta(days=13)
-
-        # Pre-fetch all data for the 14-day window in 3 queries instead of
-        # running up to 42 individual queries (one per day × 3 models).
-        all_wh = list(
-            WorkingHours.objects
-            .filter(workplace__doctor=doctor, is_active=True)
-            .select_related('workplace')
-        )
-        all_blocked = list(BlockedPeriod.objects.filter(
-            doctor=doctor,
-            starts_at__date__lte=end_date,
-            ends_at__date__gte=today,
-        ))
-        all_existing = list(Appointment.objects.filter(
-            doctor=doctor,
-            starts_at__date__range=(today, end_date),
-        ).exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED]))
-
-        delta = datetime.timedelta(minutes=slot_duration)
-
-        for days_ahead in range(14):
-            check_date = today + datetime.timedelta(days=days_ahead)
-            weekday = check_date.weekday()
-
-            day_whs = [wh for wh in all_wh if wh.weekday == weekday]
-            if not day_whs:
-                continue
-
-            day_existing = [a for a in all_existing if a.starts_at.date() == check_date]
-            day_blocked_all = [
-                bp for bp in all_blocked
-                if bp.starts_at.date() <= check_date <= bp.ends_at.date()
-            ]
-
-            for wh in day_whs:
-                day_start = timezone.make_aware(
-                    datetime.datetime.combine(check_date, wh.start_time)
-                )
-                day_end = timezone.make_aware(
-                    datetime.datetime.combine(check_date, wh.end_time)
-                )
-                current = max(day_start, now)
-                wh_blocked = [
-                    bp for bp in day_blocked_all
-                    if bp.workplace_id is None or bp.workplace_id == wh.workplace_id
-                ]
-
-                while current + delta <= day_end:
-                    w_end = current + delta
-                    occupied = any(
-                        bp.starts_at < w_end and bp.ends_at > current for bp in wh_blocked
-                    ) or any(
-                        a.starts_at < w_end and a.ends_at > current for a in day_existing
-                    )
-                    if not occupied:
-                        return Response({'next_available_date': check_date.isoformat()})
-                    current += delta
-
-        return Response({'next_available_date': None})
+        next_slot = find_next_slot_at(doctor)
+        return Response({
+            'next_available_date':
+                timezone.localtime(next_slot).date().isoformat() if next_slot else None,
+        })
 
 
 class PatientAppointmentRescheduleView(APIView):
@@ -734,6 +818,61 @@ class WaitlistDetailView(APIView):
         except Waitlist.DoesNotExist:
             raise NotFound()
         entry.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class FavoriteListCreateView(APIView):
+    permission_classes = [IsPatient]
+
+    def get(self, request):
+        # Full doctor cards (not just IDs) so the client can render the
+        # favorites list without extra per-doctor requests.
+        doctors = (
+            User.objects
+            .filter(role=User.ROLE_DOCTOR, favorited_by__patient=request.user)
+            .select_related('doctor_profile')
+            .prefetch_related('workplaces')
+            .annotate(
+                avg_rating=Avg('doctor_reviews__rating'),
+                total_reviews=Count('doctor_reviews', distinct=True),
+                favorited_at=Max('favorited_by__created_at'),
+            )
+            .order_by('-favorited_at')
+        )
+        return Response(
+            DoctorPublicSerializer(doctors, many=True, context={'request': request}).data
+        )
+
+    def post(self, request):
+        doctor_id = request.data.get('doctor_id')
+        if not doctor_id:
+            raise ValidationError({'doctor_id': 'This field is required.'})
+        try:
+            doctor = User.objects.get(
+                pk=doctor_id, role=User.ROLE_DOCTOR, doctor_profile__is_verified=True
+            )
+        except (User.DoesNotExist, ValueError):
+            raise NotFound('Doctor not found.')
+        favorite, created = Favorite.objects.get_or_create(patient=request.user, doctor=doctor)
+        return Response(
+            {
+                'id': str(favorite.id),
+                'doctor_id': str(doctor.id),
+                'created_at': favorite.created_at.isoformat(),
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class FavoriteDetailView(APIView):
+    permission_classes = [IsPatient]
+
+    def delete(self, request, doctor_id):
+        try:
+            favorite = Favorite.objects.get(patient=request.user, doctor_id=doctor_id)
+        except Favorite.DoesNotExist:
+            raise NotFound()
+        favorite.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -261,6 +261,8 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
     review_count = serializers.SerializerMethodField()
     consultation_fee = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
+    next_slot_at = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -269,6 +271,7 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
             'specialization', 'specialization_display',
             'slot_duration_min', 'consultation_fee', 'primary_workplace',
             'average_rating', 'review_count', 'avatar_url',
+            'next_slot_at', 'distance_km',
         ]
 
     def get_specialization(self, obj):
@@ -325,6 +328,16 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
         if request and not url.startswith(('http://', 'https://')):
             url = request.build_absolute_uri(url)
         return url
+
+    def get_next_slot_at(self, obj):
+        # Only populated by DoctorListView for ordering=next_slot.
+        value = getattr(obj, 'next_slot_at', None)
+        return value.isoformat() if value else None
+
+    def get_distance_km(self, obj):
+        # Only annotated when lat/lng were sent with the request.
+        value = getattr(obj, 'distance_km', None)
+        return round(float(value), 1) if value is not None else None
 
 
 class DoctorDetailSerializer(DoctorPublicSerializer):
