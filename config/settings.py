@@ -29,12 +29,18 @@ def _validate_secret(name, value):
         )
 
 
-_validate_secret('SECRET_KEY', SECRET_KEY)
-_validate_secret('JWT_SECRET_KEY', JWT_SECRET_KEY)
-if not DEBUG and JWT_SECRET_KEY == SECRET_KEY:
+def _validate_secrets_distinct(secret_key, jwt_secret_key):
     from django.core.exceptions import ImproperlyConfigured
 
-    raise ImproperlyConfigured('JWT_SECRET_KEY must be different from SECRET_KEY.')
+    # A single leaked key must not compromise both Django sessions/signing and
+    # every JWT ever issued — the two secrets have to be independent.
+    if jwt_secret_key == secret_key:
+        raise ImproperlyConfigured('JWT_SECRET_KEY must be different from SECRET_KEY.')
+
+
+_validate_secret('SECRET_KEY', SECRET_KEY)
+_validate_secret('JWT_SECRET_KEY', JWT_SECRET_KEY)
+_validate_secrets_distinct(SECRET_KEY, JWT_SECRET_KEY)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
 INSTALLED_APPS = [
