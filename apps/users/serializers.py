@@ -8,7 +8,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.settings import api_settings
 from django.contrib.auth.models import update_last_login
 
-from .models import DoctorProfile, PatientProfile, PasswordResetOTP, UserDevice
+from .models import DoctorProfile, EmailChangeRequest, PatientProfile, PasswordResetOTP, UserDevice
 from .tokens import MedalizeRefreshToken
 
 User = get_user_model()
@@ -222,6 +222,61 @@ class UserDeviceSerializer(serializers.ModelSerializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
+
+
+class AccountDeactivateSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, max_length=128)
+
+    def validate_password(self, value):
+        if not self.context['request'].user.check_password(value):
+            raise serializers.ValidationError('Password is incorrect.')
+        return value
+
+
+class EmailChangeRequestSerializer(serializers.Serializer):
+    new_email = serializers.EmailField(max_length=255)
+    password = serializers.CharField(write_only=True, max_length=128)
+
+    def validate_password(self, value):
+        if not self.context['request'].user.check_password(value):
+            raise serializers.ValidationError('Password is incorrect.')
+        return value
+
+    def validate_new_email(self, value):
+        user = self.context['request'].user
+        if User.objects.exclude(pk=user.pk).filter(email=value).exists():
+            raise serializers.ValidationError('A user with this email already exists.')
+        return value
+
+
+class EmailChangeConfirmSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=6, min_length=6)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        change_request = (
+            EmailChangeRequest.objects
+            .filter(user=user, used=False, expires_at__gt=timezone.now())
+            .first()
+        )
+        # Always call check_password (even when no request exists) so response
+        # time is constant regardless of whether an active code exists —
+        # prevents timing attacks.
+        code_hash = change_request.code_hash if change_request is not None else _DUMMY_OTP_HASH
+        valid = check_password(attrs['code'], code_hash)
+
+        if change_request is None or not valid:
+            if change_request is not None:
+                # Count the failed guess and retire the code once the per-account
+                # attempt cap is reached, so a leaked/guessable code can't be
+                # brute-forced across rotating IPs.
+                EmailChangeRequest.objects.filter(pk=change_request.pk).update(attempts=F('attempts') + 1)
+                if change_request.attempts + 1 >= EmailChangeRequest.MAX_ATTEMPTS:
+                    EmailChangeRequest.objects.filter(pk=change_request.pk).update(used=True)
+            raise serializers.ValidationError({'code': 'Invalid or expired code.'})
+
+        attrs['change_request'] = change_request
+        return attrs
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):

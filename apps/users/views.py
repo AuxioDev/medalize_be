@@ -23,9 +23,12 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .models import PasswordResetOTP, PatientProfile, SocialAccount, UserDevice
+from .models import EmailChangeRequest, PasswordResetOTP, PatientProfile, SocialAccount, UserDevice
 from .serializers import (
+    AccountDeactivateSerializer,
     CustomTokenObtainPairSerializer,
+    EmailChangeConfirmSerializer,
+    EmailChangeRequestSerializer,
     MeSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
@@ -38,6 +41,7 @@ from .serializers import (
 )
 from .social import SocialTokenError, verify_id_token
 from .throttles import (
+    EmailChangeRateThrottle,
     LoginRateThrottle,
     PasswordResetRateThrottle,
     RegisterRateThrottle,
@@ -59,6 +63,14 @@ _NEW_DEVICE_EMAIL_BODY = (
     'If this was you, no action is needed. If you do not recognize this '
     'device, change your password immediately and revoke the device from '
     'Profile > Security > Active sessions.'
+)
+
+_EMAIL_CHANGED_SUBJECT = 'Your Medalize Account Email Was Changed'
+# Keep as a whole template with named placeholders so it can be wrapped in
+# gettext_lazy later without restructuring the string.
+_EMAIL_CHANGED_BODY = (
+    'The email address for your Medalize account was changed to {new_email}.\n\n'
+    'If this was not you, please contact support immediately.'
 )
 
 
@@ -469,6 +481,121 @@ class PasswordResetConfirmView(APIView):
             _revoke_all_sessions(user)
 
         return Response({'message': 'Password reset successful.'})
+
+
+class AccountDeactivateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = AccountDeactivateSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        request.user.is_active = False
+        request.user.save(update_fields=['is_active'])
+        # Deactivation terminates everything, including the current session —
+        # no keep_jti. Reactivation is manual (Django admin).
+        _revoke_all_sessions(request.user)
+        return Response({'message': 'Account deactivated.'})
+
+
+class EmailChangeRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [EmailChangeRateThrottle]
+
+    def post(self, request):
+        serializer = EmailChangeRequestSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        new_email = serializer.validated_data['new_email']
+
+        # Cooldown: skip creation if a code already exists that was issued
+        # less than 60 s ago (expires_at > now + 9 min ⟺ created_at > now - 1 min).
+        if not request.user.email_change_requests.filter(
+            used=False,
+            expires_at__gt=timezone.now() + timedelta(minutes=9),
+        ).exists():
+            # Invalidate any previous unused codes for this user
+            request.user.email_change_requests.filter(used=False).update(used=True)
+
+            code = f'{secrets.randbelow(1_000_000):06d}'
+            EmailChangeRequest.objects.create(
+                user=request.user,
+                new_email=new_email,
+                code_hash=make_password(code),
+                expires_at=timezone.now() + _OTP_LIFETIME,
+            )
+            try:
+                # The code goes to the new address — receiving it proves
+                # ownership of that address.
+                send_mail(
+                    subject='Your Medalize Email Change Code',
+                    message=(
+                        f'Your email change confirmation code is: {code}\n\n'
+                        'This code expires in 10 minutes. '
+                        'If you did not request this, you can safely ignore this email.'
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[new_email],
+                    fail_silently=False,
+                )
+            except Exception:
+                logger.exception('Failed to send email change code')
+
+        return Response({'message': 'A confirmation code has been sent to the new email address.'})
+
+
+class EmailChangeConfirmView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [EmailChangeRateThrottle]
+
+    def post(self, request):
+        serializer = EmailChangeConfirmSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        change_request = serializer.validated_data['change_request']
+
+        old_email = request.user.email
+        with transaction.atomic():
+            # Re-fetch with a row lock to prevent two concurrent requests from
+            # both consuming the same code (TOCTOU race condition).
+            try:
+                locked = (
+                    EmailChangeRequest.objects
+                    .select_for_update()
+                    .get(pk=change_request.pk, used=False, expires_at__gt=timezone.now())
+                )
+            except EmailChangeRequest.DoesNotExist:
+                return Response(
+                    {'code': 'validation_error', 'errors': {'code': ['Invalid or expired code.']}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            locked.used = True
+            locked.save(update_fields=['used'])
+            # The address may have been claimed by another account between
+            # request and confirm — re-check before hitting the unique constraint.
+            if User.objects.exclude(pk=request.user.pk).filter(email=locked.new_email).exists():
+                return Response(
+                    {
+                        'code': 'validation_error',
+                        'errors': {'new_email': ['A user with this email already exists.']},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            request.user.email = locked.new_email
+            request.user.save(update_fields=['email'])
+            # An email change is a credential change — terminate all sessions;
+            # the user signs in again with the new address.
+            _revoke_all_sessions(request.user)
+
+        try:
+            send_mail(
+                subject=_EMAIL_CHANGED_SUBJECT,
+                message=_EMAIL_CHANGED_BODY.format(new_email=locked.new_email),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[old_email],
+                fail_silently=False,
+            )
+        except Exception:
+            logger.exception('Failed to send email change notification to user %s', request.user.pk)
+
+        return Response({'message': 'Email changed successfully.', 'email': request.user.email})
 
 
 class AvatarUploadView(APIView):

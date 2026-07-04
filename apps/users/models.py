@@ -211,6 +211,27 @@ class PasswordResetOTP(models.Model):
         ]
 
 
+class EmailChangeRequest(models.Model):
+    # Number of wrong-code guesses after which the request is retired, forcing
+    # the user to request a fresh code. Caps per-account brute force
+    # independently of the per-user throttle.
+    MAX_ATTEMPTS = 5
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_change_requests')
+    new_email = models.EmailField(max_length=255)
+    code_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    attempts = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'used', 'expires_at']),
+        ]
+
+
 @receiver(post_save, sender=User)
 def create_role_profile(sender, instance, created, **kwargs):
     if not created:

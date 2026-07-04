@@ -156,6 +156,7 @@ REST_FRAMEWORK = {
         'social_login': '10/minute',
         'register': '5/minute',
         'password_reset': '3/minute',
+        'email_change': '3/minute',
         'fcm_register': '20/hour',
     },
 }
