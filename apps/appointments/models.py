@@ -143,6 +143,28 @@ class Waitlist(models.Model):
         return f'{self.patient} waiting for Dr.{self.doctor}'
 
 
+class Favorite(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='favorites',
+    )
+    doctor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='favorited_by',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['patient', 'doctor']]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.patient} ♥ Dr.{self.doctor}'
+
+
 class Review(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     appointment = models.OneToOneField(

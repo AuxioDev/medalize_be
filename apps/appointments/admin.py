@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Appointment, Review
+from .models import Appointment, Favorite, Review
 
 
 @admin.register(Appointment)
@@ -9,6 +9,13 @@ class AppointmentAdmin(admin.ModelAdmin):
     list_filter = ['status']
     search_fields = ['doctor__email', 'patient__email']
     ordering = ['-starts_at']
+
+
+@admin.register(Favorite)
+class FavoriteAdmin(admin.ModelAdmin):
+    list_display = ['patient', 'doctor', 'created_at']
+    search_fields = ['doctor__email', 'patient__email']
+    ordering = ['-created_at']
 
 
 @admin.register(Review)

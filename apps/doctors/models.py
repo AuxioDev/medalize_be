@@ -24,6 +24,8 @@ class Workplace(models.Model):
     city = models.CharField(max_length=100)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     is_primary = models.BooleanField(default=False)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     class Meta:
         ordering = ['-is_primary', 'name']
