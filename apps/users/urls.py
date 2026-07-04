@@ -4,6 +4,9 @@ from .views import (
     AvatarUploadView,
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
+    DeviceDetailView,
+    DeviceListView,
+    DeviceRevokeAllView,
     LogoutView,
     MeView,
     PasswordChangeView,
@@ -11,13 +14,18 @@ from .views import (
     PasswordResetRequestView,
     PatientProfileView,
     RegisterView,
+    SocialLoginView,
 )
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='auth-register'),
     path('login/', CustomTokenObtainPairView.as_view(), name='auth-login'),
+    path('social/<str:provider>/', SocialLoginView.as_view(), name='auth-social-login'),
     path('token/refresh/', CustomTokenRefreshView.as_view(), name='auth-token-refresh'),
     path('logout/', LogoutView.as_view(), name='auth-logout'),
+    path('devices/', DeviceListView.as_view(), name='auth-devices'),
+    path('devices/revoke-all/', DeviceRevokeAllView.as_view(), name='auth-devices-revoke-all'),
+    path('devices/<int:pk>/', DeviceDetailView.as_view(), name='auth-device-detail'),
     path('me/', MeView.as_view(), name='auth-me'),
     path('profile/avatar/', AvatarUploadView.as_view(), name='auth-avatar-upload'),
     path('profile/patient/', PatientProfileView.as_view(), name='auth-patient-profile'),

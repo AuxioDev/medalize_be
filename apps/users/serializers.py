@@ -8,7 +8,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.settings import api_settings
 from django.contrib.auth.models import update_last_login
 
-from .models import DoctorProfile, PatientProfile, PasswordResetOTP
+from .models import DoctorProfile, PatientProfile, PasswordResetOTP, UserDevice
 from .tokens import MedalizeRefreshToken
 
 User = get_user_model()
@@ -25,6 +25,42 @@ def _validate_phone_format(value):
     return value
 
 
+def build_login_payload(user, remember_me=False):
+    """Issue a JWT pair for a user and build the standard login response body.
+
+    Shared by password login and social login so both flows return an
+    identical payload. Returns (data, refresh_token).
+    """
+    refresh = MedalizeRefreshToken.for_user(user, remember_me=remember_me)
+    data = {
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+    }
+
+    if api_settings.UPDATE_LAST_LOGIN:
+        update_last_login(None, user)
+
+    data['role'] = user.role
+    data['user_id'] = str(user.id)
+    data['email'] = user.email
+    data['first_name'] = user.first_name
+    data['last_name'] = user.last_name
+
+    if user.role == User.ROLE_DOCTOR:
+        try:
+            profile = user.doctor_profile
+            data['onboarding_complete'] = profile.onboarding_complete
+            data['is_verified'] = profile.is_verified
+        except DoctorProfile.DoesNotExist:
+            data['onboarding_complete'] = False
+            data['is_verified'] = False
+    else:
+        data['onboarding_complete'] = True
+        data['is_verified'] = None
+
+    return data, refresh
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     remember_me = serializers.BooleanField(default=False, write_only=True)
 
@@ -32,33 +68,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         remember_me = attrs.pop('remember_me', False)
         # Authenticate via grandparent only — skips TokenObtainPairSerializer.get_token,
         # so exactly one outstanding token is created below instead of two.
-        data = super(TokenObtainPairSerializer, self).validate(attrs)
-
-        refresh = MedalizeRefreshToken.for_user(self.user, remember_me=remember_me)
-        data['refresh'] = str(refresh)
-        data['access'] = str(refresh.access_token)
-
-        if api_settings.UPDATE_LAST_LOGIN:
-            update_last_login(None, self.user)
-
-        data['role'] = self.user.role
-        data['user_id'] = str(self.user.id)
-        data['email'] = self.user.email
-        data['first_name'] = self.user.first_name
-        data['last_name'] = self.user.last_name
-
-        if self.user.role == User.ROLE_DOCTOR:
-            try:
-                profile = self.user.doctor_profile
-                data['onboarding_complete'] = profile.onboarding_complete
-                data['is_verified'] = profile.is_verified
-            except DoctorProfile.DoesNotExist:
-                data['onboarding_complete'] = False
-                data['is_verified'] = False
-        else:
-            data['onboarding_complete'] = True
-            data['is_verified'] = None
-
+        super(TokenObtainPairSerializer, self).validate(attrs)
+        data, refresh = build_login_payload(self.user, remember_me=remember_me)
+        self.refresh_token = refresh
         return data
 
 
@@ -181,6 +193,31 @@ class PasswordChangeSerializer(serializers.Serializer):
         if not user.check_password(attrs['old_password']):
             raise serializers.ValidationError({'old_password': 'Old password is incorrect.'})
         return attrs
+
+
+class SocialLoginSerializer(serializers.Serializer):
+    id_token = serializers.CharField()
+    device_id = serializers.CharField(max_length=255, required=False, allow_blank=True, default='')
+    device_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default='')
+    platform = serializers.ChoiceField(
+        choices=UserDevice.PLATFORM_CHOICES, required=False, allow_blank=True, default=''
+    )
+    role = serializers.ChoiceField(
+        choices=User.ROLE_CHOICES, required=False, default=User.ROLE_PATIENT
+    )
+    remember_me = serializers.BooleanField(default=False)
+
+
+class UserDeviceSerializer(serializers.ModelSerializer):
+    is_current = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserDevice
+        fields = ['id', 'device_id', 'device_name', 'platform', 'last_seen_at', 'created_at', 'is_current']
+
+    def get_is_current(self, obj):
+        current_device_id = self.context.get('current_device_id', '')
+        return bool(current_device_id) and obj.device_id == current_device_id
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):

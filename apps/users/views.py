@@ -23,7 +23,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .models import PasswordResetOTP, PatientProfile
+from .models import PasswordResetOTP, PatientProfile, SocialAccount, UserDevice
 from .serializers import (
     CustomTokenObtainPairSerializer,
     MeSerializer,
@@ -32,28 +32,106 @@ from .serializers import (
     PasswordResetRequestSerializer,
     PatientProfileSerializer,
     RegisterSerializer,
+    SocialLoginSerializer,
+    UserDeviceSerializer,
+    build_login_payload,
 )
-from .throttles import LoginRateThrottle, PasswordResetRateThrottle, RegisterRateThrottle
+from .social import SocialTokenError, verify_id_token
+from .throttles import (
+    LoginRateThrottle,
+    PasswordResetRateThrottle,
+    RegisterRateThrottle,
+    SocialLoginRateThrottle,
+)
 
 User = get_user_model()
 
 _OTP_LIFETIME = timedelta(minutes=10)
 
+_NEW_DEVICE_EMAIL_SUBJECT = 'New Sign-In to Your Medalize Account'
+# Keep as a whole template with named placeholders so it can be wrapped in
+# gettext_lazy later without restructuring the string.
+_NEW_DEVICE_EMAIL_BODY = (
+    'Your Medalize account was just signed in to from a new device.\n\n'
+    'Device: {device_name}\n'
+    'Platform: {platform}\n'
+    'Time: {time} (UTC)\n\n'
+    'If this was you, no action is needed. If you do not recognize this '
+    'device, change your password immediately and revoke the device from '
+    'Profile > Security > Active sessions.'
+)
 
-def _revoke_all_sessions(user):
+
+def _revoke_all_sessions(user, keep_jti=None):
     """Blacklist every outstanding refresh token for a user.
 
     Called on password change/reset so that a credential change terminates all
     other sessions (OWASP ASVS V3.3). Access tokens are short-lived (15 min) and
     expire on their own; blacklisting refresh tokens stops them being renewed.
+    ``keep_jti`` spares one refresh token (the calling device's session).
     """
     from rest_framework_simplejwt.token_blacklist.models import (
         BlacklistedToken,
         OutstandingToken,
     )
 
-    for token in OutstandingToken.objects.filter(user=user):
+    tokens = OutstandingToken.objects.filter(user=user)
+    if keep_jti:
+        tokens = tokens.exclude(jti=keep_jti)
+    for token in tokens:
         BlacklistedToken.objects.get_or_create(token=token)
+
+
+def _blacklist_jti(user, jti):
+    from rest_framework_simplejwt.token_blacklist.models import (
+        BlacklistedToken,
+        OutstandingToken,
+    )
+
+    if not jti:
+        return
+    for token in OutstandingToken.objects.filter(user=user, jti=jti):
+        BlacklistedToken.objects.get_or_create(token=token)
+
+
+def _request_device_id(request):
+    return str(request.headers.get('X-Device-Id') or request.data.get('device_id') or '').strip()
+
+
+def _upsert_device(user, refresh_token, data):
+    """Track the device a refresh token was issued to.
+
+    Upserts by (user, device_id) so each device holds exactly one live jti,
+    and emails the account owner the first time a new device appears.
+    """
+    device_id = str(data.get('device_id') or '').strip()[:255]
+    if not device_id:
+        return
+    defaults = {'jti': str(refresh_token['jti']), 'last_seen_at': timezone.now()}
+    device_name = str(data.get('device_name') or '').strip()[:255]
+    platform = str(data.get('platform') or '').strip()
+    if device_name:
+        defaults['device_name'] = device_name
+    if platform in (UserDevice.PLATFORM_IOS, UserDevice.PLATFORM_ANDROID):
+        defaults['platform'] = platform
+    device, created = UserDevice.objects.update_or_create(
+        user=user, device_id=device_id, defaults=defaults
+    )
+    if created:
+        try:
+            send_mail(
+                subject=_NEW_DEVICE_EMAIL_SUBJECT,
+                message=_NEW_DEVICE_EMAIL_BODY.format(
+                    device_name=device.device_name or 'Unknown device',
+                    platform=device.get_platform_display() or 'Unknown',
+                    time=timezone.now().strftime('%d %b %Y %H:%M'),
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception:
+            logger.exception('Failed to send new device alert email to user %s', user.pk)
 
 
 class RegisterView(APIView):
@@ -79,6 +157,17 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [LoginRateThrottle]
 
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:
+            from rest_framework_simplejwt.exceptions import InvalidToken
+
+            raise InvalidToken(e.args[0])
+        _upsert_device(serializer.user, serializer.refresh_token, request.data)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
 
 class CustomTokenRefreshView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
@@ -92,6 +181,15 @@ class CustomTokenRefreshView(TokenRefreshView):
                 response.data['user_id'] = str(decoded['user_id'])
             except Exception:
                 pass
+            # Rotation issued a new refresh token — re-point the device record
+            # at its jti so per-device revocation always hits the live token.
+            try:
+                if request.data.get('device_id') and response.data.get('refresh'):
+                    new_refresh = RefreshToken(response.data['refresh'])
+                    user = User.objects.get(pk=new_refresh['user_id'])
+                    _upsert_device(user, new_refresh, request.data)
+            except Exception:
+                logger.exception('Failed to update device record on token refresh')
         return response
 
 
@@ -114,6 +212,134 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SocialLoginView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [SocialLoginRateThrottle]
+
+    def post(self, request, provider):
+        if provider not in dict(SocialAccount.PROVIDER_CHOICES):
+            return Response(
+                {'code': 'not_found', 'message': 'Unsupported social provider.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        serializer = SocialLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            claims = verify_id_token(provider, serializer.validated_data['id_token'])
+        except SocialTokenError as exc:
+            return Response(
+                {'code': 'social_token_invalid', 'message': str(exc)},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        with transaction.atomic():
+            account = (
+                SocialAccount.objects
+                .select_related('user')
+                .filter(provider=provider, provider_uid=claims['provider_uid'])
+                .first()
+            )
+            if account is not None:
+                user = account.user
+            else:
+                email = claims['email']
+                if not email:
+                    return Response(
+                        {
+                            'code': 'social_email_missing',
+                            'message': 'The provider did not share an email address for this account.',
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                user = User.objects.filter(email=email).first()
+                if user is not None and not claims['email_verified']:
+                    # Auto-linking on an unverified email would let anyone who
+                    # claims this address at the provider take over the account.
+                    return Response(
+                        {
+                            'code': 'social_email_unverified',
+                            'message': (
+                                'An account with this email already exists, but the provider '
+                                'has not verified the email address. Please sign in with your password.'
+                            ),
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                if user is None:
+                    user = User.objects.create_user(
+                        email=email,
+                        password=None,
+                        role=serializer.validated_data['role'],
+                        first_name=claims['first_name'],
+                        last_name=claims['last_name'],
+                    )
+                SocialAccount.objects.create(
+                    user=user,
+                    provider=provider,
+                    provider_uid=claims['provider_uid'],
+                    email=email,
+                )
+
+        if not user.is_active:
+            return Response(
+                {'code': 'invalid_credentials', 'message': 'Invalid email or password.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        data, refresh = build_login_payload(
+            user, remember_me=serializer.validated_data['remember_me']
+        )
+        _upsert_device(user, refresh, serializer.validated_data)
+        return Response(data)
+
+
+class DeviceListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserDeviceSerializer(
+            request.user.devices.all(),
+            many=True,
+            context={'current_device_id': _request_device_id(request)},
+        )
+        return Response(serializer.data)
+
+
+class DeviceDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            device = request.user.devices.get(pk=pk)
+        except UserDevice.DoesNotExist:
+            return Response(
+                {'code': 'not_found', 'message': 'Device not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        _blacklist_jti(request.user, device.jti)
+        device.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DeviceRevokeAllView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_device_id = _request_device_id(request)
+        keep_jti = None
+        if current_device_id:
+            current = request.user.devices.filter(device_id=current_device_id).first()
+            if current is not None:
+                keep_jti = current.jti
+        _revoke_all_sessions(request.user, keep_jti=keep_jti)
+        devices = request.user.devices.all()
+        if current_device_id:
+            devices = devices.exclude(device_id=current_device_id)
+        devices.delete()
+        return Response({'message': 'All other sessions have been revoked.'})
 
 
 class MeView(APIView):

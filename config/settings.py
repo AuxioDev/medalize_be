@@ -153,6 +153,7 @@ REST_FRAMEWORK = {
         'anon': '100/minute',
         'user': '1000/minute',
         'login': '10/minute',
+        'social_login': '10/minute',
         'register': '5/minute',
         'password_reset': '3/minute',
         'fcm_register': '20/hour',
@@ -188,6 +189,16 @@ EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@medalize.com')
 
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
+
+# ── Social login (Google / Apple id_token verification) ──────────────────────
+# Comma-separated OAuth client ids accepted as `aud` in Google id_tokens
+# (list the iOS, Android and web client ids from the Firebase/Google Cloud
+# console). Empty ⇒ Google sign-in disabled.
+GOOGLE_OAUTH_CLIENT_IDS = env.list('GOOGLE_OAUTH_CLIENT_IDS', default=[])
+# Comma-separated bundle ids accepted as `aud` in Apple id_tokens (the app's
+# bundle identifier registered in the Apple Developer portal, e.g.
+# az.medalize.app). Empty ⇒ Apple sign-in disabled.
+APPLE_BUNDLE_IDS = env.list('APPLE_BUNDLE_IDS', default=[])
 
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=['http://localhost:3000'])
 CORS_ALLOW_CREDENTIALS = True
