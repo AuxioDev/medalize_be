@@ -23,6 +23,8 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from apps.notifications.i18n import recipient_language, render_template
+
 from .models import EmailChangeRequest, PasswordResetOTP, PatientProfile, SocialAccount, UserDevice
 from .serializers import (
     AccountDeactivateSerializer,
@@ -51,27 +53,6 @@ from .throttles import (
 User = get_user_model()
 
 _OTP_LIFETIME = timedelta(minutes=10)
-
-_NEW_DEVICE_EMAIL_SUBJECT = 'New Sign-In to Your Medalize Account'
-# Keep as a whole template with named placeholders so it can be wrapped in
-# gettext_lazy later without restructuring the string.
-_NEW_DEVICE_EMAIL_BODY = (
-    'Your Medalize account was just signed in to from a new device.\n\n'
-    'Device: {device_name}\n'
-    'Platform: {platform}\n'
-    'Time: {time} (UTC)\n\n'
-    'If this was you, no action is needed. If you do not recognize this '
-    'device, change your password immediately and revoke the device from '
-    'Profile > Security > Active sessions.'
-)
-
-_EMAIL_CHANGED_SUBJECT = 'Your Medalize Account Email Was Changed'
-# Keep as a whole template with named placeholders so it can be wrapped in
-# gettext_lazy later without restructuring the string.
-_EMAIL_CHANGED_BODY = (
-    'The email address for your Medalize account was changed to {new_email}.\n\n'
-    'If this was not you, please contact support immediately.'
-)
 
 
 def _revoke_all_sessions(user, keep_jti=None):
@@ -131,13 +112,15 @@ def _upsert_device(user, refresh_token, data):
     )
     if created:
         try:
+            tpl = render_template(
+                'new_device_login', recipient_language(user),
+                device_name=device.device_name or 'Unknown device',
+                platform=device.get_platform_display() or 'Unknown',
+                time=timezone.now().strftime('%d.%m.%Y %H:%M'),
+            )
             send_mail(
-                subject=_NEW_DEVICE_EMAIL_SUBJECT,
-                message=_NEW_DEVICE_EMAIL_BODY.format(
-                    device_name=device.device_name or 'Unknown device',
-                    platform=device.get_platform_display() or 'Unknown',
-                    time=timezone.now().strftime('%d %b %Y %H:%M'),
-                ),
+                subject=tpl['subject'],
+                message=tpl['body'],
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
                 fail_silently=False,
@@ -427,13 +410,12 @@ class PasswordResetRequestView(APIView):
                     expires_at=timezone.now() + _OTP_LIFETIME,
                 )
                 try:
+                    tpl = render_template(
+                        'password_reset_code', recipient_language(user), code=otp_code
+                    )
                     send_mail(
-                        subject='Your Medalize Password Reset Code',
-                        message=(
-                            f'Your password reset code is: {otp_code}\n\n'
-                            'This code expires in 10 minutes. '
-                            'If you did not request this, you can safely ignore this email.'
-                        ),
+                        subject=tpl['subject'],
+                        message=tpl['body'],
                         from_email=settings.DEFAULT_FROM_EMAIL,
                         recipient_list=[user.email],
                         fail_silently=False,
@@ -524,14 +506,14 @@ class EmailChangeRequestView(APIView):
             )
             try:
                 # The code goes to the new address — receiving it proves
-                # ownership of that address.
+                # ownership of that address. Same user, so their current
+                # language preference applies.
+                tpl = render_template(
+                    'email_change_code', recipient_language(request.user), code=code
+                )
                 send_mail(
-                    subject='Your Medalize Email Change Code',
-                    message=(
-                        f'Your email change confirmation code is: {code}\n\n'
-                        'This code expires in 10 minutes. '
-                        'If you did not request this, you can safely ignore this email.'
-                    ),
+                    subject=tpl['subject'],
+                    message=tpl['body'],
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[new_email],
                     fail_silently=False,
@@ -585,9 +567,14 @@ class EmailChangeConfirmView(APIView):
             _revoke_all_sessions(request.user)
 
         try:
+            # Alert goes to the old address, but it is the same account owner —
+            # their language preference is unchanged by the email change.
+            tpl = render_template(
+                'email_changed', recipient_language(request.user), new_email=locked.new_email
+            )
             send_mail(
-                subject=_EMAIL_CHANGED_SUBJECT,
-                message=_EMAIL_CHANGED_BODY.format(new_email=locked.new_email),
+                subject=tpl['subject'],
+                message=tpl['body'],
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[old_email],
                 fail_silently=False,

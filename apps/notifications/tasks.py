@@ -6,7 +6,20 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 
+from .i18n import recipient_language, render_template
+
 logger = logging.getLogger(__name__)
+
+# Numeric date format readable in all supported languages. Localized month
+# names (%b) would need locale.setlocale(), which is not thread-safe in a
+# multi-worker Django/Celery process.
+DATE_FORMAT = '%d.%m.%Y %H:%M'
+
+
+def _display_name(user):
+    """Bare full name (no honorific prefix — 'Dr.' etc. lives in the
+    translated template text), falling back to the email address."""
+    return f'{user.first_name} {user.last_name}'.strip() or user.email
 
 
 def _send_email(subject, message, recipient_email):
@@ -73,19 +86,21 @@ def send_booking_confirmed(appointment_id):
     except Appointment.DoesNotExist:
         return
 
-    doctor_name = f'{appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
-    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-    msg = f'Your appointment with Dr. {doctor_name} on {date_str} has been confirmed.'
+    tpl = render_template(
+        'booking_confirmed', recipient_language(appt.patient),
+        doctor_name=_display_name(appt.doctor),
+        date_str=appt.starts_at.strftime(DATE_FORMAT),
+    )
 
     Notification.objects.create(
         user=appt.patient,
         appointment=appt,
         type=Notification.TYPE_CONFIRMED,
-        title='Appointment Confirmed',
-        message=msg,
+        title=tpl['title'],
+        message=tpl['body'],
     )
-    _send_email('Appointment Confirmed — Medalize', msg, appt.patient.email)
-    _send_push(appt.patient, 'Appointment Confirmed', msg,
+    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
@@ -98,19 +113,21 @@ def send_booking_declined(appointment_id):
     except Appointment.DoesNotExist:
         return
 
-    doctor_name = f'Dr. {appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
-    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-    msg = f'Your appointment request with {doctor_name} on {date_str} has been declined.'
+    tpl = render_template(
+        'booking_declined', recipient_language(appt.patient),
+        doctor_name=_display_name(appt.doctor),
+        date_str=appt.starts_at.strftime(DATE_FORMAT),
+    )
 
     Notification.objects.create(
         user=appt.patient,
         appointment=appt,
         type=Notification.TYPE_CANCELLED,
-        title='Appointment Declined',
-        message=msg,
+        title=tpl['title'],
+        message=tpl['body'],
     )
-    _send_email('Appointment Declined — Medalize', msg, appt.patient.email)
-    _send_push(appt.patient, 'Appointment Declined', msg,
+    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
@@ -123,34 +140,37 @@ def send_booking_cancelled(appointment_id):
     except Appointment.DoesNotExist:
         return
 
-    doctor_name = f'{appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
-    patient_name = f'{appt.patient.first_name} {appt.patient.last_name}'.strip() or appt.patient.email
-    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-
-    patient_msg = f'Your appointment with Dr. {doctor_name} on {date_str} has been cancelled.'
-    doctor_msg = f'The appointment with {patient_name} on {date_str} has been cancelled.'
+    date_str = appt.starts_at.strftime(DATE_FORMAT)
+    patient_tpl = render_template(
+        'booking_cancelled_patient', recipient_language(appt.patient),
+        doctor_name=_display_name(appt.doctor), date_str=date_str,
+    )
+    doctor_tpl = render_template(
+        'booking_cancelled_doctor', recipient_language(appt.doctor),
+        patient_name=_display_name(appt.patient), date_str=date_str,
+    )
 
     Notification.objects.bulk_create([
         Notification(
             user=appt.patient,
             appointment=appt,
             type=Notification.TYPE_CANCELLED,
-            title='Appointment Cancelled',
-            message=patient_msg,
+            title=patient_tpl['title'],
+            message=patient_tpl['body'],
         ),
         Notification(
             user=appt.doctor,
             appointment=appt,
             type=Notification.TYPE_CANCELLED,
-            title='Appointment Cancelled',
-            message=doctor_msg,
+            title=doctor_tpl['title'],
+            message=doctor_tpl['body'],
         ),
     ])
-    _send_email('Appointment Cancelled — Medalize', patient_msg, appt.patient.email)
-    _send_email('Appointment Cancelled — Medalize', doctor_msg, appt.doctor.email)
+    _send_email(patient_tpl['subject'], patient_tpl['body'], appt.patient.email)
+    _send_email(doctor_tpl['subject'], doctor_tpl['body'], appt.doctor.email)
     push_data = {'type': 'appointment', 'appointment_id': str(appt.id)}
-    _send_push(appt.patient, 'Appointment Cancelled', patient_msg, data=push_data)
-    _send_push(appt.doctor, 'Appointment Cancelled', doctor_msg, data=push_data)
+    _send_push(appt.patient, patient_tpl['title'], patient_tpl['body'], data=push_data)
+    _send_push(appt.doctor, doctor_tpl['title'], doctor_tpl['body'], data=push_data)
 
 
 @shared_task
@@ -162,22 +182,21 @@ def send_rescheduling_required(appointment_id):
     except Appointment.DoesNotExist:
         return
 
-    doctor_name = f'{appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
-    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-    msg = (
-        f'Your appointment with Dr. {doctor_name} on {date_str} '
-        'needs to be rescheduled. Please book a new time slot.'
+    tpl = render_template(
+        'rescheduling_required', recipient_language(appt.patient),
+        doctor_name=_display_name(appt.doctor),
+        date_str=appt.starts_at.strftime(DATE_FORMAT),
     )
 
     Notification.objects.create(
         user=appt.patient,
         appointment=appt,
         type=Notification.TYPE_RESCHEDULING,
-        title='Appointment Rescheduling Required',
-        message=msg,
+        title=tpl['title'],
+        message=tpl['body'],
     )
-    _send_email('Rescheduling Required — Medalize', msg, appt.patient.email)
-    _send_push(appt.patient, 'Rescheduling Required', msg,
+    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
@@ -190,11 +209,15 @@ def send_appointment_rescheduled(appointment_id):
     except Appointment.DoesNotExist:
         return
 
-    patient_name = f'{appt.patient.first_name} {appt.patient.last_name}'.strip() or appt.patient.email
-    doctor_name = f'Dr. {appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
-    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-    doctor_msg = f'{patient_name} rescheduled their appointment to {date_str}. Please confirm.'
-    patient_msg = f'Your appointment with {doctor_name} has been rescheduled to {date_str}. Awaiting confirmation.'
+    date_str = appt.starts_at.strftime(DATE_FORMAT)
+    doctor_tpl = render_template(
+        'appointment_rescheduled_doctor', recipient_language(appt.doctor),
+        patient_name=_display_name(appt.patient), date_str=date_str,
+    )
+    patient_tpl = render_template(
+        'appointment_rescheduled_patient', recipient_language(appt.patient),
+        doctor_name=_display_name(appt.doctor), date_str=date_str,
+    )
 
     push_data = {'type': 'appointment', 'appointment_id': str(appt.id)}
     Notification.objects.bulk_create([
@@ -202,21 +225,21 @@ def send_appointment_rescheduled(appointment_id):
             user=appt.doctor,
             appointment=appt,
             type=Notification.TYPE_GENERAL,
-            title='Appointment Rescheduled',
-            message=doctor_msg,
+            title=doctor_tpl['title'],
+            message=doctor_tpl['body'],
         ),
         Notification(
             user=appt.patient,
             appointment=appt,
             type=Notification.TYPE_GENERAL,
-            title='Appointment Rescheduled',
-            message=patient_msg,
+            title=patient_tpl['title'],
+            message=patient_tpl['body'],
         ),
     ])
-    _send_email('Appointment Rescheduled — Medalize', doctor_msg, appt.doctor.email)
-    _send_email('Appointment Rescheduled — Medalize', patient_msg, appt.patient.email)
-    _send_push(appt.doctor, 'Appointment Rescheduled', doctor_msg, data=push_data)
-    _send_push(appt.patient, 'Appointment Rescheduled', patient_msg, data=push_data)
+    _send_email(doctor_tpl['subject'], doctor_tpl['body'], appt.doctor.email)
+    _send_email(patient_tpl['subject'], patient_tpl['body'], appt.patient.email)
+    _send_push(appt.doctor, doctor_tpl['title'], doctor_tpl['body'], data=push_data)
+    _send_push(appt.patient, patient_tpl['title'], patient_tpl['body'], data=push_data)
 
 
 @shared_task
@@ -228,19 +251,21 @@ def send_booking_no_show(appointment_id):
     except Appointment.DoesNotExist:
         return
 
-    doctor_name = f'Dr. {appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
-    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-    msg = f'You were marked as a no-show for your appointment with {doctor_name} on {date_str}.'
+    tpl = render_template(
+        'booking_no_show', recipient_language(appt.patient),
+        doctor_name=_display_name(appt.doctor),
+        date_str=appt.starts_at.strftime(DATE_FORMAT),
+    )
 
     Notification.objects.create(
         user=appt.patient,
         appointment=appt,
         type=Notification.TYPE_GENERAL,
-        title='Missed Appointment',
-        message=msg,
+        title=tpl['title'],
+        message=tpl['body'],
     )
-    _send_email('Missed Appointment — Medalize', msg, appt.patient.email)
-    _send_push(appt.patient, 'Missed Appointment', msg,
+    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
@@ -253,15 +278,15 @@ def send_doctor_verified(user_id):
     except User.DoesNotExist:
         return
 
-    msg = 'Your account has been verified. You can now receive appointments from patients.'
+    tpl = render_template('doctor_verified', recipient_language(user))
     Notification.objects.create(
         user=user,
         type=Notification.TYPE_GENERAL,
-        title='Account Verified',
-        message=msg,
+        title=tpl['title'],
+        message=tpl['body'],
     )
-    _send_email('Your Medalize Account is Verified', msg, user.email)
-    _send_push(user, 'Account Verified', msg)
+    _send_email(tpl['subject'], tpl['body'], user.email)
+    _send_push(user, tpl['title'], tpl['body'])
 
 
 @shared_task
@@ -303,9 +328,7 @@ def notify_waitlist_slot_available(doctor_id):
     except User.DoesNotExist:
         return
 
-    doctor_name = f'Dr. {doctor.first_name} {doctor.last_name}'.strip() or f'Dr. {doctor.email}'
-    msg = f'A slot has opened up with {doctor_name}. Book your appointment now.'
-    title = 'New Slot Available'
+    doctor_name = _display_name(doctor)
 
     # Exclude patients who already have an active appointment with this doctor.
     existing_patient_ids = set(
@@ -321,21 +344,29 @@ def notify_waitlist_slot_available(doctor_id):
         .select_related('patient')
     )
     waiting = list(waiting)
+    # Rendered per recipient — each waitlisted patient gets their own language.
+    rendered = [
+        render_template(
+            'waitlist_slot_available', recipient_language(entry.patient),
+            doctor_name=doctor_name,
+        )
+        for entry in waiting
+    ]
     Notification.objects.bulk_create([
         Notification(
             user=entry.patient,
             type=Notification.TYPE_GENERAL,
-            title=title,
-            message=msg,
+            title=tpl['title'],
+            message=tpl['body'],
         )
-        for entry in waiting
+        for entry, tpl in zip(waiting, rendered)
     ])
     # Fan out email/push as one job per recipient so a large waitlist doesn't
     # block the worker on serial network I/O.
     push_data = {'type': 'doctor', 'doctor_id': str(doctor.id)}
-    for entry in waiting:
+    for entry, tpl in zip(waiting, rendered):
         deliver_email_and_push.delay(
-            str(entry.patient_id), 'Slot Available — Medalize', title, msg, push_data
+            str(entry.patient_id), tpl['subject'], tpl['title'], tpl['body'], push_data
         )
 
 
@@ -355,34 +386,39 @@ def send_appointment_reminders():
     )
 
     for appt in upcoming:
-        doctor_name = f'{appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
-        date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-        patient_msg = f'Reminder: appointment with Dr. {doctor_name} at {date_str}.'
-        doctor_msg = f'Reminder: appointment with {appt.patient.first_name} {appt.patient.last_name} at {date_str}.'
+        date_str = appt.starts_at.strftime(DATE_FORMAT)
+        patient_tpl = render_template(
+            'appointment_reminder_patient', recipient_language(appt.patient),
+            doctor_name=_display_name(appt.doctor), date_str=date_str,
+        )
+        doctor_tpl = render_template(
+            'appointment_reminder_doctor', recipient_language(appt.doctor),
+            patient_name=_display_name(appt.patient), date_str=date_str,
+        )
 
         Notification.objects.bulk_create([
             Notification(
                 user=appt.patient,
                 appointment=appt,
                 type=Notification.TYPE_REMINDER,
-                title='Appointment Reminder',
-                message=patient_msg,
+                title=patient_tpl['title'],
+                message=patient_tpl['body'],
             ),
             Notification(
                 user=appt.doctor,
                 appointment=appt,
                 type=Notification.TYPE_REMINDER,
-                title='Appointment Reminder',
-                message=doctor_msg,
+                title=doctor_tpl['title'],
+                message=doctor_tpl['body'],
             ),
         ])
         deliver_email_and_push.delay(
-            str(appt.patient_id), 'Appointment Reminder — Medalize',
-            'Appointment Reminder', patient_msg,
+            str(appt.patient_id), patient_tpl['subject'],
+            patient_tpl['title'], patient_tpl['body'],
         )
         deliver_email_and_push.delay(
-            str(appt.doctor_id), 'Appointment Reminder — Medalize',
-            'Appointment Reminder', doctor_msg,
+            str(appt.doctor_id), doctor_tpl['subject'],
+            doctor_tpl['title'], doctor_tpl['body'],
         )
 
 
@@ -395,18 +431,20 @@ def send_appointment_completed(appointment_id):
     except Appointment.DoesNotExist:
         return
 
-    doctor_name = f'Dr. {appt.doctor.first_name} {appt.doctor.last_name}'.strip() or appt.doctor.email
-    msg = f'Your appointment with {doctor_name} is complete. Leave a review to help others!'
+    tpl = render_template(
+        'appointment_completed', recipient_language(appt.patient),
+        doctor_name=_display_name(appt.doctor),
+    )
 
     Notification.objects.create(
         user=appt.patient,
         appointment=appt,
         type=Notification.TYPE_GENERAL,
-        title='Appointment Complete',
-        message=msg,
+        title=tpl['title'],
+        message=tpl['body'],
     )
-    _send_email('Appointment Complete — Medalize', msg, appt.patient.email)
-    _send_push(appt.patient, 'Appointment Complete', msg,
+    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
@@ -420,19 +458,21 @@ def send_new_booking_pending(appointment_id):
     except Appointment.DoesNotExist:
         return
 
-    patient_name = f'{appt.patient.first_name} {appt.patient.last_name}'.strip() or appt.patient.email
-    date_str = appt.starts_at.strftime('%d %b %Y at %H:%M')
-    msg = f'{patient_name} has requested an appointment on {date_str}. Please confirm or decline.'
+    tpl = render_template(
+        'new_booking_pending', recipient_language(appt.doctor),
+        patient_name=_display_name(appt.patient),
+        date_str=appt.starts_at.strftime(DATE_FORMAT),
+    )
 
     Notification.objects.create(
         user=appt.doctor,
         appointment=appt,
         type=Notification.TYPE_GENERAL,
-        title='New Appointment Request',
-        message=msg,
+        title=tpl['title'],
+        message=tpl['body'],
     )
-    _send_email('New Appointment Request — Medalize', msg, appt.doctor.email)
-    _send_push(appt.doctor, 'New Appointment Request', msg,
+    _send_email(tpl['subject'], tpl['body'], appt.doctor.email)
+    _send_push(appt.doctor, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
 
