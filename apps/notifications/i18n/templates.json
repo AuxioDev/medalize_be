@@ -1,0 +1,554 @@
+{
+  "booking_confirmed": {
+    "en": {
+      "subject": "Appointment Confirmed — Medalize",
+      "title": "Appointment Confirmed",
+      "body": "Your appointment with Dr. {doctor_name} on {date_str} has been confirmed."
+    },
+    "ru": {
+      "subject": "Приём подтверждён — Medalize",
+      "title": "Приём подтверждён",
+      "body": "Ваш приём у врача {doctor_name} {date_str} подтверждён."
+    },
+    "az": {
+      "subject": "Qəbul təsdiqləndi — Medalize",
+      "title": "Qəbul təsdiqləndi",
+      "body": "Dr. {doctor_name} ilə {date_str} tarixli qəbulunuz təsdiqləndi."
+    },
+    "tr": {
+      "subject": "Randevu Onaylandı — Medalize",
+      "title": "Randevu Onaylandı",
+      "body": "Dr. {doctor_name} ile {date_str} tarihli randevunuz onaylandı."
+    },
+    "fr": {
+      "subject": "Rendez-vous confirmé — Medalize",
+      "title": "Rendez-vous confirmé",
+      "body": "Votre rendez-vous avec le Dr {doctor_name} le {date_str} a été confirmé."
+    },
+    "zh": {
+      "subject": "预约已确认 — Medalize",
+      "title": "预约已确认",
+      "body": "您与 {doctor_name} 医生在 {date_str} 的预约已确认。"
+    }
+  },
+  "booking_declined": {
+    "en": {
+      "subject": "Appointment Declined — Medalize",
+      "title": "Appointment Declined",
+      "body": "Your appointment request with Dr. {doctor_name} on {date_str} has been declined."
+    },
+    "ru": {
+      "subject": "Приём отклонён — Medalize",
+      "title": "Приём отклонён",
+      "body": "Ваш запрос на приём у врача {doctor_name} {date_str} был отклонён."
+    },
+    "az": {
+      "subject": "Qəbul rədd edildi — Medalize",
+      "title": "Qəbul rədd edildi",
+      "body": "Dr. {doctor_name} üçün {date_str} tarixli qəbul tələbiniz rədd edildi."
+    },
+    "tr": {
+      "subject": "Randevu Reddedildi — Medalize",
+      "title": "Randevu Reddedildi",
+      "body": "Dr. {doctor_name} için {date_str} tarihli randevu talebiniz reddedildi."
+    },
+    "fr": {
+      "subject": "Rendez-vous refusé — Medalize",
+      "title": "Rendez-vous refusé",
+      "body": "Votre demande de rendez-vous avec le Dr {doctor_name} le {date_str} a été refusée."
+    },
+    "zh": {
+      "subject": "预约已被拒绝 — Medalize",
+      "title": "预约已被拒绝",
+      "body": "您与 {doctor_name} 医生在 {date_str} 的预约请求已被拒绝。"
+    }
+  },
+  "booking_cancelled_patient": {
+    "en": {
+      "subject": "Appointment Cancelled — Medalize",
+      "title": "Appointment Cancelled",
+      "body": "Your appointment with Dr. {doctor_name} on {date_str} has been cancelled."
+    },
+    "ru": {
+      "subject": "Приём отменён — Medalize",
+      "title": "Приём отменён",
+      "body": "Ваш приём у врача {doctor_name} {date_str} был отменён."
+    },
+    "az": {
+      "subject": "Qəbul ləğv edildi — Medalize",
+      "title": "Qəbul ləğv edildi",
+      "body": "Dr. {doctor_name} ilə {date_str} tarixli qəbulunuz ləğv edildi."
+    },
+    "tr": {
+      "subject": "Randevu İptal Edildi — Medalize",
+      "title": "Randevu İptal Edildi",
+      "body": "Dr. {doctor_name} ile {date_str} tarihli randevunuz iptal edildi."
+    },
+    "fr": {
+      "subject": "Rendez-vous annulé — Medalize",
+      "title": "Rendez-vous annulé",
+      "body": "Votre rendez-vous avec le Dr {doctor_name} le {date_str} a été annulé."
+    },
+    "zh": {
+      "subject": "预约已取消 — Medalize",
+      "title": "预约已取消",
+      "body": "您与 {doctor_name} 医生在 {date_str} 的预约已取消。"
+    }
+  },
+  "booking_cancelled_doctor": {
+    "en": {
+      "subject": "Appointment Cancelled — Medalize",
+      "title": "Appointment Cancelled",
+      "body": "The appointment with {patient_name} on {date_str} has been cancelled."
+    },
+    "ru": {
+      "subject": "Приём отменён — Medalize",
+      "title": "Приём отменён",
+      "body": "Приём с пациентом {patient_name} {date_str} был отменён."
+    },
+    "az": {
+      "subject": "Qəbul ləğv edildi — Medalize",
+      "title": "Qəbul ləğv edildi",
+      "body": "{patient_name} ilə {date_str} tarixli qəbul ləğv edildi."
+    },
+    "tr": {
+      "subject": "Randevu İptal Edildi — Medalize",
+      "title": "Randevu İptal Edildi",
+      "body": "{patient_name} ile {date_str} tarihli randevu iptal edildi."
+    },
+    "fr": {
+      "subject": "Rendez-vous annulé — Medalize",
+      "title": "Rendez-vous annulé",
+      "body": "Le rendez-vous avec {patient_name} le {date_str} a été annulé."
+    },
+    "zh": {
+      "subject": "预约已取消 — Medalize",
+      "title": "预约已取消",
+      "body": "与患者 {patient_name} 在 {date_str} 的预约已取消。"
+    }
+  },
+  "rescheduling_required": {
+    "en": {
+      "subject": "Rescheduling Required — Medalize",
+      "title": "Appointment Rescheduling Required",
+      "body": "Your appointment with Dr. {doctor_name} on {date_str} needs to be rescheduled. Please book a new time slot."
+    },
+    "ru": {
+      "subject": "Требуется перенос приёма — Medalize",
+      "title": "Требуется перенос приёма",
+      "body": "Ваш приём у врача {doctor_name} {date_str} требует переноса. Пожалуйста, выберите новое время."
+    },
+    "az": {
+      "subject": "Qəbulun vaxtı dəyişdirilməlidir — Medalize",
+      "title": "Qəbulun vaxtı dəyişdirilməlidir",
+      "body": "Dr. {doctor_name} ilə {date_str} tarixli qəbulunuzun vaxtı dəyişdirilməlidir. Zəhmət olmasa yeni vaxt seçin."
+    },
+    "tr": {
+      "subject": "Randevu Yeniden Planlanmalı — Medalize",
+      "title": "Randevu Yeniden Planlanmalı",
+      "body": "Dr. {doctor_name} ile {date_str} tarihli randevunuzun yeniden planlanması gerekiyor. Lütfen yeni bir zaman seçin."
+    },
+    "fr": {
+      "subject": "Reprogrammation nécessaire — Medalize",
+      "title": "Reprogrammation nécessaire",
+      "body": "Votre rendez-vous avec le Dr {doctor_name} le {date_str} doit être reprogrammé. Veuillez choisir un nouveau créneau."
+    },
+    "zh": {
+      "subject": "需要重新安排预约 — Medalize",
+      "title": "需要重新安排预约",
+      "body": "您与 {doctor_name} 医生在 {date_str} 的预约需要重新安排。请选择新的时间。"
+    }
+  },
+  "appointment_rescheduled_doctor": {
+    "en": {
+      "subject": "Appointment Rescheduled — Medalize",
+      "title": "Appointment Rescheduled",
+      "body": "{patient_name} rescheduled their appointment to {date_str}. Please confirm."
+    },
+    "ru": {
+      "subject": "Приём перенесён — Medalize",
+      "title": "Приём перенесён",
+      "body": "Пациент {patient_name} перенёс приём на {date_str}. Пожалуйста, подтвердите."
+    },
+    "az": {
+      "subject": "Qəbulun vaxtı dəyişdirildi — Medalize",
+      "title": "Qəbulun vaxtı dəyişdirildi",
+      "body": "{patient_name} qəbulunun vaxtını {date_str} tarixinə dəyişdi. Zəhmət olmasa təsdiqləyin."
+    },
+    "tr": {
+      "subject": "Randevu Yeniden Planlandı — Medalize",
+      "title": "Randevu Yeniden Planlandı",
+      "body": "{patient_name} randevusunu {date_str} tarihine ertelendi. Lütfen onaylayın."
+    },
+    "fr": {
+      "subject": "Rendez-vous reprogrammé — Medalize",
+      "title": "Rendez-vous reprogrammé",
+      "body": "{patient_name} a reprogrammé son rendez-vous au {date_str}. Veuillez confirmer."
+    },
+    "zh": {
+      "subject": "预约已重新安排 — Medalize",
+      "title": "预约已重新安排",
+      "body": "{patient_name} 已将预约改期至 {date_str}，请确认。"
+    }
+  },
+  "appointment_rescheduled_patient": {
+    "en": {
+      "subject": "Appointment Rescheduled — Medalize",
+      "title": "Appointment Rescheduled",
+      "body": "Your appointment with Dr. {doctor_name} has been rescheduled to {date_str}. Awaiting confirmation."
+    },
+    "ru": {
+      "subject": "Приём перенесён — Medalize",
+      "title": "Приём перенесён",
+      "body": "Ваш приём у врача {doctor_name} перенесён на {date_str}. Ожидает подтверждения."
+    },
+    "az": {
+      "subject": "Qəbulun vaxtı dəyişdirildi — Medalize",
+      "title": "Qəbulun vaxtı dəyişdirildi",
+      "body": "Dr. {doctor_name} ilə qəbulunuz {date_str} tarixinə dəyişdirildi. Təsdiq gözlənilir."
+    },
+    "tr": {
+      "subject": "Randevu Yeniden Planlandı — Medalize",
+      "title": "Randevu Yeniden Planlandı",
+      "body": "Dr. {doctor_name} ile randevunuz {date_str} tarihine ertelendi. Onay bekleniyor."
+    },
+    "fr": {
+      "subject": "Rendez-vous reprogrammé — Medalize",
+      "title": "Rendez-vous reprogrammé",
+      "body": "Votre rendez-vous avec le Dr {doctor_name} a été reprogrammé au {date_str}. En attente de confirmation."
+    },
+    "zh": {
+      "subject": "预约已重新安排 — Medalize",
+      "title": "预约已重新安排",
+      "body": "您与 {doctor_name} 医生的预约已改期至 {date_str}，等待确认。"
+    }
+  },
+  "booking_no_show": {
+    "en": {
+      "subject": "Missed Appointment — Medalize",
+      "title": "Missed Appointment",
+      "body": "You were marked as a no-show for your appointment with Dr. {doctor_name} on {date_str}."
+    },
+    "ru": {
+      "subject": "Пропущенный приём — Medalize",
+      "title": "Пропущенный приём",
+      "body": "Вы были отмечены как не явившийся на приём к врачу {doctor_name} {date_str}."
+    },
+    "az": {
+      "subject": "Qəbula gəlinmədi — Medalize",
+      "title": "Qəbula gəlinmədi",
+      "body": "Dr. {doctor_name} ilə {date_str} tarixli qəbulunuza gəlmədiyiniz qeyd edildi."
+    },
+    "tr": {
+      "subject": "Kaçırılan Randevu — Medalize",
+      "title": "Kaçırılan Randevu",
+      "body": "Dr. {doctor_name} ile {date_str} tarihli randevunuza gelmediğiniz kaydedildi."
+    },
+    "fr": {
+      "subject": "Rendez-vous manqué — Medalize",
+      "title": "Rendez-vous manqué",
+      "body": "Vous avez été marqué comme absent à votre rendez-vous avec le Dr {doctor_name} le {date_str}."
+    },
+    "zh": {
+      "subject": "错过预约 — Medalize",
+      "title": "错过预约",
+      "body": "您在 {date_str} 与 {doctor_name} 医生的预约被标记为未出席。"
+    }
+  },
+  "doctor_verified": {
+    "en": {
+      "subject": "Your Medalize Account is Verified",
+      "title": "Account Verified",
+      "body": "Your account has been verified. You can now receive appointments from patients."
+    },
+    "ru": {
+      "subject": "Ваш аккаунт Medalize подтверждён",
+      "title": "Аккаунт подтверждён",
+      "body": "Ваш аккаунт подтверждён. Теперь вы можете принимать пациентов."
+    },
+    "az": {
+      "subject": "Medalize hesabınız təsdiqləndi",
+      "title": "Hesab təsdiqləndi",
+      "body": "Hesabınız təsdiqləndi. Artıq pasiyentlərdən qəbul ala bilərsiniz."
+    },
+    "tr": {
+      "subject": "Medalize Hesabınız Onaylandı",
+      "title": "Hesap Onaylandı",
+      "body": "Hesabınız onaylandı. Artık hastalardan randevu alabilirsiniz."
+    },
+    "fr": {
+      "subject": "Votre compte Medalize est vérifié",
+      "title": "Compte vérifié",
+      "body": "Votre compte a été vérifié. Vous pouvez désormais recevoir des rendez-vous de patients."
+    },
+    "zh": {
+      "subject": "您的 Medalize 账户已通过验证",
+      "title": "账户已验证",
+      "body": "您的账户已通过验证。现在您可以接受患者的预约了。"
+    }
+  },
+  "waitlist_slot_available": {
+    "en": {
+      "subject": "Slot Available — Medalize",
+      "title": "New Slot Available",
+      "body": "A slot has opened up with Dr. {doctor_name}. Book your appointment now."
+    },
+    "ru": {
+      "subject": "Появилось свободное время — Medalize",
+      "title": "Новый свободный слот",
+      "body": "У врача {doctor_name} появилось свободное время. Запишитесь на приём прямо сейчас."
+    },
+    "az": {
+      "subject": "Boş vaxt yarandı — Medalize",
+      "title": "Yeni boş vaxt",
+      "body": "Dr. {doctor_name}-də boş vaxt yarandı. İndi qəbula yazılın."
+    },
+    "tr": {
+      "subject": "Boş Randevu Saati — Medalize",
+      "title": "Yeni Boş Saat",
+      "body": "Dr. {doctor_name} için boş bir randevu saati açıldı. Hemen randevu alın."
+    },
+    "fr": {
+      "subject": "Créneau disponible — Medalize",
+      "title": "Nouveau créneau disponible",
+      "body": "Un créneau s'est libéré chez le Dr {doctor_name}. Réservez votre rendez-vous dès maintenant."
+    },
+    "zh": {
+      "subject": "有新的空闲时段 — Medalize",
+      "title": "新的空闲时段",
+      "body": "{doctor_name} 医生有新的空闲时段。请立即预约。"
+    }
+  },
+  "appointment_reminder_patient": {
+    "en": {
+      "subject": "Appointment Reminder — Medalize",
+      "title": "Appointment Reminder",
+      "body": "Reminder: appointment with Dr. {doctor_name} at {date_str}."
+    },
+    "ru": {
+      "subject": "Напоминание о приёме — Medalize",
+      "title": "Напоминание о приёме",
+      "body": "Напоминание: приём у врача {doctor_name} в {date_str}."
+    },
+    "az": {
+      "subject": "Qəbul xatırlatması — Medalize",
+      "title": "Qəbul xatırlatması",
+      "body": "Xatırlatma: Dr. {doctor_name} ilə qəbul {date_str} tarixindədir."
+    },
+    "tr": {
+      "subject": "Randevu Hatırlatması — Medalize",
+      "title": "Randevu Hatırlatması",
+      "body": "Hatırlatma: Dr. {doctor_name} ile randevunuz {date_str} tarihinde."
+    },
+    "fr": {
+      "subject": "Rappel de rendez-vous — Medalize",
+      "title": "Rappel de rendez-vous",
+      "body": "Rappel : rendez-vous avec le Dr {doctor_name} à {date_str}."
+    },
+    "zh": {
+      "subject": "预约提醒 — Medalize",
+      "title": "预约提醒",
+      "body": "提醒：您与 {doctor_name} 医生的预约时间为 {date_str}。"
+    }
+  },
+  "appointment_reminder_doctor": {
+    "en": {
+      "subject": "Appointment Reminder — Medalize",
+      "title": "Appointment Reminder",
+      "body": "Reminder: appointment with {patient_name} at {date_str}."
+    },
+    "ru": {
+      "subject": "Напоминание о приёме — Medalize",
+      "title": "Напоминание о приёме",
+      "body": "Напоминание: приём с пациентом {patient_name} в {date_str}."
+    },
+    "az": {
+      "subject": "Qəbul xatırlatması — Medalize",
+      "title": "Qəbul xatırlatması",
+      "body": "Xatırlatma: {patient_name} ilə qəbul {date_str} tarixindədir."
+    },
+    "tr": {
+      "subject": "Randevu Hatırlatması — Medalize",
+      "title": "Randevu Hatırlatması",
+      "body": "Hatırlatma: {patient_name} ile randevunuz {date_str} tarihinde."
+    },
+    "fr": {
+      "subject": "Rappel de rendez-vous — Medalize",
+      "title": "Rappel de rendez-vous",
+      "body": "Rappel : rendez-vous avec {patient_name} à {date_str}."
+    },
+    "zh": {
+      "subject": "预约提醒 — Medalize",
+      "title": "预约提醒",
+      "body": "提醒：与患者 {patient_name} 的预约时间为 {date_str}。"
+    }
+  },
+  "appointment_completed": {
+    "en": {
+      "subject": "Appointment Complete — Medalize",
+      "title": "Appointment Complete",
+      "body": "Your appointment with Dr. {doctor_name} is complete. Leave a review to help others!"
+    },
+    "ru": {
+      "subject": "Приём завершён — Medalize",
+      "title": "Приём завершён",
+      "body": "Ваш приём у врача {doctor_name} завершён. Оставьте отзыв, чтобы помочь другим!"
+    },
+    "az": {
+      "subject": "Qəbul tamamlandı — Medalize",
+      "title": "Qəbul tamamlandı",
+      "body": "Dr. {doctor_name} ilə qəbulunuz tamamlandı. Digərlərinə kömək etmək üçün rəy bildirin!"
+    },
+    "tr": {
+      "subject": "Randevu Tamamlandı — Medalize",
+      "title": "Randevu Tamamlandı",
+      "body": "Dr. {doctor_name} ile randevunuz tamamlandı. Başkalarına yardımcı olmak için bir değerlendirme bırakın!"
+    },
+    "fr": {
+      "subject": "Rendez-vous terminé — Medalize",
+      "title": "Rendez-vous terminé",
+      "body": "Votre rendez-vous avec le Dr {doctor_name} est terminé. Laissez un avis pour aider les autres !"
+    },
+    "zh": {
+      "subject": "预约已完成 — Medalize",
+      "title": "预约已完成",
+      "body": "您与 {doctor_name} 医生的预约已完成。留下评价以帮助其他人！"
+    }
+  },
+  "new_booking_pending": {
+    "en": {
+      "subject": "New Appointment Request — Medalize",
+      "title": "New Appointment Request",
+      "body": "{patient_name} has requested an appointment on {date_str}. Please confirm or decline."
+    },
+    "ru": {
+      "subject": "Новый запрос на приём — Medalize",
+      "title": "Новый запрос на приём",
+      "body": "Пациент {patient_name} запросил приём на {date_str}. Пожалуйста, подтвердите или отклоните."
+    },
+    "az": {
+      "subject": "Yeni qəbul tələbi — Medalize",
+      "title": "Yeni qəbul tələbi",
+      "body": "{patient_name} {date_str} tarixinə qəbul tələb etdi. Zəhmət olmasa təsdiqləyin və ya rədd edin."
+    },
+    "tr": {
+      "subject": "Yeni Randevu Talebi — Medalize",
+      "title": "Yeni Randevu Talebi",
+      "body": "{patient_name}, {date_str} tarihi için randevu talep etti. Lütfen onaylayın veya reddedin."
+    },
+    "fr": {
+      "subject": "Nouvelle demande de rendez-vous — Medalize",
+      "title": "Nouvelle demande de rendez-vous",
+      "body": "{patient_name} a demandé un rendez-vous le {date_str}. Veuillez confirmer ou refuser."
+    },
+    "zh": {
+      "subject": "新的预约请求 — Medalize",
+      "title": "新的预约请求",
+      "body": "{patient_name} 请求在 {date_str} 预约。请确认或拒绝。"
+    }
+  },
+  "new_device_login": {
+    "en": {
+      "subject": "New Sign-In to Your Medalize Account",
+      "body": "Your Medalize account was just signed in to from a new device.\n\nDevice: {device_name}\nPlatform: {platform}\nTime: {time} (UTC)\n\nIf this was you, no action is needed. If you do not recognize this device, change your password immediately and revoke the device from Profile > Security > Active sessions."
+    },
+    "ru": {
+      "subject": "Новый вход в ваш аккаунт Medalize",
+      "body": "В ваш аккаунт Medalize только что вошли с нового устройства.\n\nУстройство: {device_name}\nПлатформа: {platform}\nВремя: {time} (UTC)\n\nЕсли это были вы, никаких действий не требуется. Если вы не узнаёте это устройство, немедленно смените пароль и отзовите доступ устройства в Профиль > Безопасность > Активные сессии."
+    },
+    "az": {
+      "subject": "Medalize hesabınıza yeni giriş",
+      "body": "Medalize hesabınıza yeni cihazdan giriş edildi.\n\nCihaz: {device_name}\nPlatforma: {platform}\nVaxt: {time} (UTC)\n\nBu siz idinizsə, əlavə əməliyyat tələb olunmur. Bu cihazı tanımırsınızsa, dərhal parolunuzu dəyişin və cihazı Profil > Təhlükəsizlik > Aktiv sessiyalar bölməsindən ləğv edin."
+    },
+    "tr": {
+      "subject": "Medalize Hesabınıza Yeni Giriş",
+      "body": "Medalize hesabınıza yeni bir cihazdan giriş yapıldı.\n\nCihaz: {device_name}\nPlatform: {platform}\nZaman: {time} (UTC)\n\nBu sizseniz herhangi bir işlem yapmanıza gerek yok. Bu cihazı tanımıyorsanız, hemen şifrenizi değiştirin ve cihazı Profil > Güvenlik > Aktif Oturumlar bölümünden kaldırın."
+    },
+    "fr": {
+      "subject": "Nouvelle connexion à votre compte Medalize",
+      "body": "Une connexion à votre compte Medalize vient d'avoir lieu depuis un nouvel appareil.\n\nAppareil : {device_name}\nPlateforme : {platform}\nHeure : {time} (UTC)\n\nSi c'était vous, aucune action n'est requise. Si vous ne reconnaissez pas cet appareil, changez immédiatement votre mot de passe et révoquez l'appareil depuis Profil > Sécurité > Sessions actives."
+    },
+    "zh": {
+      "subject": "您的 Medalize 账户有新登录",
+      "body": "您的 Medalize 账户刚刚在一台新设备上登录。\n\n设备：{device_name}\n平台：{platform}\n时间：{time}（UTC）\n\n如果是您本人操作，无需采取任何措施。如果您不认识此设备，请立即修改密码，并在“个人资料 > 安全 > 活跃会话”中撤销该设备的访问权限。"
+    }
+  },
+  "email_changed": {
+    "en": {
+      "subject": "Your Medalize Account Email Was Changed",
+      "body": "The email address for your Medalize account was changed to {new_email}.\n\nIf this was not you, please contact support immediately."
+    },
+    "ru": {
+      "subject": "Email вашего аккаунта Medalize был изменён",
+      "body": "Email вашего аккаунта Medalize был изменён на {new_email}.\n\nЕсли это были не вы, немедленно свяжитесь со службой поддержки."
+    },
+    "az": {
+      "subject": "Medalize hesabınızın email ünvanı dəyişdirildi",
+      "body": "Medalize hesabınızın email ünvanı {new_email} olaraq dəyişdirildi.\n\nBu siz deyildinizsə, dərhal dəstək xidməti ilə əlaqə saxlayın."
+    },
+    "tr": {
+      "subject": "Medalize Hesap E-postanız Değiştirildi",
+      "body": "Medalize hesabınızın e-posta adresi {new_email} olarak değiştirildi.\n\nBu siz değilseniz, lütfen hemen destek ekibiyle iletişime geçin."
+    },
+    "fr": {
+      "subject": "L'e-mail de votre compte Medalize a été modifié",
+      "body": "L'adresse e-mail de votre compte Medalize a été changée en {new_email}.\n\nSi ce n'était pas vous, veuillez contacter le support immédiatement."
+    },
+    "zh": {
+      "subject": "您的 Medalize 账户邮箱已更改",
+      "body": "您的 Medalize 账户邮箱已更改为 {new_email}。\n\n如果这不是您本人的操作，请立即联系客服。"
+    }
+  },
+  "email_change_code": {
+    "en": {
+      "subject": "Your Medalize Email Change Code",
+      "body": "Your email change confirmation code is: {code}\n\nThis code expires in 10 minutes. If you did not request this, you can safely ignore this email."
+    },
+    "ru": {
+      "subject": "Код подтверждения смены email — Medalize",
+      "body": "Ваш код подтверждения смены email: {code}\n\nКод действителен 10 минут. Если вы не запрашивали это, просто проигнорируйте это письмо."
+    },
+    "az": {
+      "subject": "Email dəyişmə təsdiq kodu — Medalize",
+      "body": "Email dəyişmə təsdiq kodunuz: {code}\n\nKod 10 dəqiqə ərzində etibarlıdır. Bunu siz tələb etməmisinizsə, bu məktubu sadəcə nəzərə almayın."
+    },
+    "tr": {
+      "subject": "E-posta Değişikliği Onay Kodu — Medalize",
+      "body": "E-posta değişikliği onay kodunuz: {code}\n\nBu kod 10 dakika içinde geçerliliğini yitirir. Bunu siz talep etmediyseniz, bu e-postayı görmezden gelebilirsiniz."
+    },
+    "fr": {
+      "subject": "Code de confirmation de changement d'e-mail — Medalize",
+      "body": "Votre code de confirmation de changement d'e-mail est : {code}\n\nCe code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail."
+    },
+    "zh": {
+      "subject": "邮箱更改确认码 — Medalize",
+      "body": "您的邮箱更改确认码是：{code}\n\n该验证码将在 10 分钟后失效。如果这不是您本人发起的请求，可以忽略此邮件。"
+    }
+  },
+  "password_reset_code": {
+    "en": {
+      "subject": "Your Medalize Password Reset Code",
+      "body": "Your password reset code is: {code}\n\nThis code expires in 10 minutes. If you did not request this, you can safely ignore this email."
+    },
+    "ru": {
+      "subject": "Код сброса пароля — Medalize",
+      "body": "Ваш код для сброса пароля: {code}\n\nКод действителен 10 минут. Если вы не запрашивали это, просто проигнорируйте это письмо."
+    },
+    "az": {
+      "subject": "Parol sıfırlama kodu — Medalize",
+      "body": "Parolunuzu sıfırlamaq üçün kodunuz: {code}\n\nKod 10 dəqiqə ərzində etibarlıdır. Bunu siz tələb etməmisinizsə, bu məktubu sadəcə nəzərə almayın."
+    },
+    "tr": {
+      "subject": "Şifre Sıfırlama Kodu — Medalize",
+      "body": "Şifre sıfırlama kodunuz: {code}\n\nBu kod 10 dakika içinde geçerliliğini yitirir. Bunu siz talep etmediyseniz, bu e-postayı görmezden gelebilirsiniz."
+    },
+    "fr": {
+      "subject": "Code de réinitialisation du mot de passe — Medalize",
+      "body": "Votre code de réinitialisation du mot de passe est : {code}\n\nCe code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail."
+    },
+    "zh": {
+      "subject": "密码重置验证码 — Medalize",
+      "body": "您的密码重置验证码是：{code}\n\n该验证码将在 10 分钟后失效。如果这不是您本人发起的请求，可以忽略此邮件。"
+    }
+  }
+}

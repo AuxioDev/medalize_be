@@ -1,0 +1,146 @@
+{
+  "general_practice": {
+    "en": "General Practice",
+    "ru": "Терапия",
+    "az": "Ümumi təbabət",
+    "tr": "Genel Pratisyenlik",
+    "fr": "Médecine générale",
+    "zh": "全科医学"
+  },
+  "cardiology": {
+    "en": "Cardiology",
+    "ru": "Кардиология",
+    "az": "Kardiologiya",
+    "tr": "Kardiyoloji",
+    "fr": "Cardiologie",
+    "zh": "心脏病学"
+  },
+  "dermatology": {
+    "en": "Dermatology",
+    "ru": "Дерматология",
+    "az": "Dermatologiya",
+    "tr": "Dermatoloji",
+    "fr": "Dermatologie",
+    "zh": "皮肤病学"
+  },
+  "neurology": {
+    "en": "Neurology",
+    "ru": "Неврология",
+    "az": "Nevrologiya",
+    "tr": "Nöroloji",
+    "fr": "Neurologie",
+    "zh": "神经病学"
+  },
+  "orthopedics": {
+    "en": "Orthopedics",
+    "ru": "Ортопедия",
+    "az": "Ortopediya",
+    "tr": "Ortopedi",
+    "fr": "Orthopédie",
+    "zh": "骨科"
+  },
+  "pediatrics": {
+    "en": "Pediatrics",
+    "ru": "Педиатрия",
+    "az": "Pediatriya",
+    "tr": "Pediatri (Çocuk Sağlığı)",
+    "fr": "Pédiatrie",
+    "zh": "儿科"
+  },
+  "psychiatry": {
+    "en": "Psychiatry",
+    "ru": "Психиатрия",
+    "az": "Psixiatriya",
+    "tr": "Psikiyatri",
+    "fr": "Psychiatrie",
+    "zh": "精神病学"
+  },
+  "gynecology": {
+    "en": "Gynecology",
+    "ru": "Гинекология",
+    "az": "Ginekologiya",
+    "tr": "Kadın Hastalıkları ve Doğum",
+    "fr": "Gynécologie",
+    "zh": "妇科"
+  },
+  "urology": {
+    "en": "Urology",
+    "ru": "Урология",
+    "az": "Urologiya",
+    "tr": "Üroloji",
+    "fr": "Urologie",
+    "zh": "泌尿科"
+  },
+  "ophthalmology": {
+    "en": "Ophthalmology",
+    "ru": "Офтальмология",
+    "az": "Oftalmologiya",
+    "tr": "Göz Hastalıkları",
+    "fr": "Ophtalmologie",
+    "zh": "眼科"
+  },
+  "ent": {
+    "en": "ENT (Ear, Nose & Throat)",
+    "ru": "Отоларингология (ЛОР)",
+    "az": "Otolarinqologiya (LOR)",
+    "tr": "Kulak Burun Boğaz (KBB)",
+    "fr": "ORL (Oto-rhino-laryngologie)",
+    "zh": "耳鼻喉科"
+  },
+  "oncology": {
+    "en": "Oncology",
+    "ru": "Онкология",
+    "az": "Onkologiya",
+    "tr": "Onkoloji",
+    "fr": "Oncologie",
+    "zh": "肿瘤科"
+  },
+  "endocrinology": {
+    "en": "Endocrinology",
+    "ru": "Эндокринология",
+    "az": "Endokrinologiya",
+    "tr": "Endokrinoloji",
+    "fr": "Endocrinologie",
+    "zh": "内分泌科"
+  },
+  "gastroenterology": {
+    "en": "Gastroenterology",
+    "ru": "Гастроэнтерология",
+    "az": "Qastroenterologiya",
+    "tr": "Gastroenteroloji",
+    "fr": "Gastro-entérologie",
+    "zh": "消化内科"
+  },
+  "pulmonology": {
+    "en": "Pulmonology",
+    "ru": "Пульмонология",
+    "az": "Pulmonologiya",
+    "tr": "Göğüs Hastalıkları",
+    "fr": "Pneumologie",
+    "zh": "呼吸科"
+  },
+  "radiology": {
+    "en": "Radiology",
+    "ru": "Радиология",
+    "az": "Radiologiya",
+    "tr": "Radyoloji",
+    "fr": "Radiologie",
+    "zh": "放射科"
+  },
+  "anesthesiology": {
+    "en": "Anesthesiology",
+    "ru": "Анестезиология",
+    "az": "Anesteziologiya",
+    "tr": "Anesteziyoloji",
+    "fr": "Anesthésiologie",
+    "zh": "麻醉科"
+  },
+  "emergency_medicine": {
+    "en": "Emergency Medicine",
+    "ru": "Неотложная медицина",
+    "az": "Təcili yardım",
+    "tr": "Acil Tıp",
+    "fr": "Médecine d'urgence",
+    "zh": "急诊医学"
+  }
+}

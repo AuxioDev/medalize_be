@@ -54,6 +54,17 @@ class User(AbstractBaseUser, PermissionsMixin):
         (ROLE_PATIENT, 'Patient'),
     ]
 
+    # Codes match the mobile AppLocale codes and the keys in the i18n JSON
+    # registries (apps/notifications/i18n, apps/users/i18n).
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('ru', 'Russian'),
+        ('az', 'Azerbaijani'),
+        ('tr', 'Turkish'),
+        ('fr', 'French'),
+        ('zh', 'Chinese'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, max_length=255)
     first_name = models.CharField(max_length=150, blank=True)
@@ -61,6 +72,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=20, blank=True)
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    # Preferred UI/notification language, kept in sync by the mobile app.
+    language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default='en')
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
