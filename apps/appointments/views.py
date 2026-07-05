@@ -31,6 +31,7 @@ from .serializers import (
     RescheduleSerializer,
     ReviewCreateSerializer,
     ReviewSerializer,
+    ReviewUpdateSerializer,
 )
 
 User = get_user_model()
@@ -766,6 +767,37 @@ class AppointmentReviewView(APIView):
         serializer.is_valid(raise_exception=True)
         review = serializer.save()
         return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)
+
+    def _get_own_review(self, request, pk):
+        """The current patient's review on their own appointment, or 404."""
+        try:
+            appointment = Appointment.objects.select_related('review').get(
+                pk=pk, patient=request.user
+            )
+        except Appointment.DoesNotExist:
+            raise NotFound()
+        try:
+            return appointment.review
+        except Review.DoesNotExist:
+            raise NotFound()
+
+    def patch(self, request, pk):
+        review = self._get_own_review(request, pk)
+        serializer = ReviewUpdateSerializer(
+            data=request.data,
+            context={'review': review, 'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        review.rating = serializer.validated_data['rating']
+        review.comment = serializer.validated_data.get('comment', review.comment)
+        review.save(update_fields=['rating', 'comment', 'updated_at'])
+        return Response(ReviewSerializer(review).data)
+
+    def delete(self, request, pk):
+        # Deletion is deliberately not time-limited, unlike editing.
+        review = self._get_own_review(request, pk)
+        review.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class DoctorReviewListView(APIView):

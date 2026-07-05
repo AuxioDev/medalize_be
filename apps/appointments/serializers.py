@@ -9,7 +9,7 @@ from rest_framework import serializers
 
 from apps.doctors.models import BlockedPeriod, WorkingHours, Workplace
 from apps.users.i18n import specialization_label, viewer_language
-from .models import Appointment, CANCELLATION_WINDOW_HOURS, Review
+from .models import Appointment, CANCELLATION_WINDOW_HOURS, REVIEW_EDIT_WINDOW_DAYS, Review
 
 User = get_user_model()
 
@@ -57,13 +57,15 @@ class AppointmentSerializer(serializers.ModelSerializer):
     can_cancel = serializers.SerializerMethodField()
     can_reschedule = serializers.SerializerMethodField()
     has_review = serializers.SerializerMethodField()
+    review = serializers.SerializerMethodField()
+    can_edit_review = serializers.SerializerMethodField()
 
     class Meta:
         model = Appointment
         fields = [
             'id', 'doctor', 'patient', 'workplace',
             'starts_at', 'ends_at', 'status', 'reason', 'notes', 'created_at',
-            'can_cancel', 'can_reschedule', 'has_review',
+            'can_cancel', 'can_reschedule', 'has_review', 'review', 'can_edit_review',
         ]
 
     def _beyond_window(self, obj):
@@ -93,6 +95,22 @@ class AppointmentSerializer(serializers.ModelSerializer):
             return obj.review is not None
         except Exception:
             return False
+
+    def get_review(self, obj):
+        # Nested so the client reads its own review together with the
+        # appointment instead of needing a separate GET round-trip.
+        try:
+            return ReviewSerializer(obj.review).data
+        except Review.DoesNotExist:
+            return None
+
+    def get_can_edit_review(self, obj):
+        # Server-computed so the client doesn't hardcode the edit-window rule.
+        try:
+            review = obj.review
+        except Review.DoesNotExist:
+            return False
+        return timezone.now() - review.created_at <= timedelta(days=REVIEW_EDIT_WINDOW_DAYS)
 
 
 class BookingSerializer(serializers.Serializer):
@@ -217,8 +235,8 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['id', 'appointment', 'rating', 'comment', 'patient_name', 'created_at']
-        read_only_fields = ['id', 'appointment', 'patient_name', 'created_at']
+        fields = ['id', 'appointment', 'rating', 'comment', 'patient_name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'appointment', 'patient_name', 'created_at', 'updated_at']
 
     def get_patient_name(self, obj):
         return f'{obj.patient.first_name} {obj.patient.last_name}'.strip() or obj.patient.email
@@ -253,6 +271,21 @@ class ReviewCreateSerializer(serializers.Serializer):
             rating=validated_data['rating'],
             comment=validated_data.get('comment', ''),
         )
+
+
+class ReviewUpdateSerializer(serializers.Serializer):
+    rating = serializers.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment = serializers.CharField(allow_blank=True, default='')
+
+    def validate(self, attrs):
+        review = self.context['review']
+        # Redundant with the view's patient-scoped lookup, but kept as a
+        # defensive check in line with the rest of the project.
+        if review.patient != self.context['request'].user:
+            raise serializers.ValidationError('You can only edit your own reviews.')
+        if timezone.now() - review.created_at > timedelta(days=REVIEW_EDIT_WINDOW_DAYS):
+            raise serializers.ValidationError('The edit window for this review has expired.')
+        return attrs
 
 
 class DoctorPublicSerializer(serializers.ModelSerializer):

@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 # can_reschedule flags the client reads) and the cancel/reschedule views.
 CANCELLATION_WINDOW_HOURS = 2
 
+# Days after a review is created during which the patient may still edit it.
+# Single source of truth for the serializer (can_edit_review flag the client
+# reads) and the review update view. Deletion is not time-limited.
+REVIEW_EDIT_WINDOW_DAYS = 7
+
 
 class Appointment(models.Model):
     STATUS_PENDING = 'pending'
@@ -185,6 +190,7 @@ class Review(models.Model):
     rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
