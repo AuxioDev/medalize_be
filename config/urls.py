@@ -11,6 +11,7 @@ urlpatterns = [
     path('api/', include('apps.appointments.urls')),
     path('api/doctor/', include('apps.doctors.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
+    path('api/assistant/', include('apps.assistant.urls')),
     path('api/health/', health_check, name='health-check'),
 ]
 

@@ -1,0 +1,26 @@
+{
+  "disclaimer": {
+    "en": "This is general information, not a medical diagnosis. If your symptoms are severe or getting worse, please see a doctor.",
+    "ru": "Это общая информация, а не медицинский диагноз. Если симптомы серьёзные или усиливаются, обратитесь к врачу.",
+    "az": "Bu ümumi məlumatdır, tibbi diaqnoz deyil. Simptomlarınız ciddidirsə və ya pisləşirsə, zəhmət olmasa həkimə müraciət edin.",
+    "tr": "Bu genel bir bilgidir, tıbbi teşhis değildir. Belirtileriniz ciddiyse veya kötüleşiyorsa lütfen bir doktora başvurun.",
+    "fr": "Ceci est une information générale, pas un diagnostic médical. Si vos symptômes sont graves ou s'aggravent, veuillez consulter un médecin.",
+    "zh": "这只是一般性信息，不是医学诊断。如果您的症状严重或正在恶化，请及时就医。"
+  },
+  "not_medical_refusal": {
+    "en": "I can only help with health and medical questions. Please ask me something related to symptoms, conditions, or finding a doctor.",
+    "ru": "Я могу помочь только с вопросами о здоровье и медицине. Пожалуйста, задайте вопрос о симптомах, заболеваниях или поиске врача.",
+    "az": "Mən yalnız sağlamlıq və tibbi suallarla bağlı kömək edə bilərəm. Zəhmət olmasa simptomlar, xəstəliklər və ya həkim tapmaqla bağlı sual verin.",
+    "tr": "Yalnızca sağlık ve tıbbi konularda yardımcı olabilirim. Lütfen semptomlar, hastalıklar veya doktor bulma ile ilgili bir soru sorun.",
+    "fr": "Je ne peux vous aider que pour des questions de santé et médicales. Veuillez poser une question liée aux symptômes, aux maladies ou à la recherche d'un médecin.",
+    "zh": "我只能回答健康和医学相关的问题。请询问有关症状、疾病或寻找医生的问题。"
+  },
+  "assistant_unavailable": {
+    "en": "The AI assistant is temporarily unavailable. Please try again later.",
+    "ru": "ИИ-ассистент временно недоступен. Пожалуйста, попробуйте позже.",
+    "az": "Süni intellekt köməkçisi müvəqqəti olaraq əlçatan deyil. Zəhmət olmasa daha sonra yenidən cəhd edin.",
+    "tr": "Yapay zekâ asistanı geçici olarak kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+    "fr": "L'assistant IA est temporairement indisponible. Veuillez réessayer plus tard.",
+    "zh": "AI 助手暂时不可用，请稍后重试。"
+  }
+}

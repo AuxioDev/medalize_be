@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'apps.doctors',
     'apps.appointments',
     'apps.notifications',
+    'apps.assistant',
 ]
 
 MIDDLEWARE = [
@@ -158,6 +159,7 @@ REST_FRAMEWORK = {
         'password_reset': '3/minute',
         'email_change': '3/minute',
         'fcm_register': '20/hour',
+        'assistant_message': '30/hour',
     },
 }
 
@@ -239,6 +241,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.notifications.tasks.expire_stale_pending_appointments',
         'schedule': timedelta(minutes=30),
     },
+    'delete-expired-assistant-conversations': {
+        'task': 'apps.assistant.tasks.delete_expired_conversations',
+        # 90-day TTL cleanup; unlike the 30-minute jobs above, once a day is enough.
+        'schedule': timedelta(hours=24),
+    },
 }
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
@@ -301,6 +308,13 @@ STORAGES = {
         'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'
     },
 }
+
+# ── AI symptom assistant (Anthropic Claude) ──────────────────────────────────
+# Both values must be set for the assistant feature to be enabled; leave either
+# blank to disable it (all /api/assistant/ endpoints answer 503). Neither is
+# needed for migrations — only for runtime API calls and message encryption.
+ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+ASSISTANT_ENCRYPTION_KEY = env('ASSISTANT_ENCRYPTION_KEY', default='')
 
 # Firebase Admin SDK for FCM push notifications.
 # Set FIREBASE_CREDENTIALS_JSON to the path of your serviceAccountKey.json,
