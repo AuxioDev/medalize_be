@@ -178,7 +178,7 @@
     "tr": {
       "subject": "Randevu Yeniden Planlandı — Medalize",
       "title": "Randevu Yeniden Planlandı",
-      "body": "{patient_name} randevusunu {date_str} tarihine ertelendi. Lütfen onaylayın."
+      "body": "{patient_name} randevusunu {date_str} tarihine erteledi. Lütfen onaylayın."
     },
     "fr": {
       "subject": "Rendez-vous reprogrammé — Medalize",
@@ -301,7 +301,7 @@
     "az": {
       "subject": "Boş vaxt yarandı — Medalize",
       "title": "Yeni boş vaxt",
-      "body": "Dr. {doctor_name}-də boş vaxt yarandı. İndi qəbula yazılın."
+      "body": "Dr. {doctor_name} üçün boş vaxt yarandı. İndi qəbula yazılın."
     },
     "tr": {
       "subject": "Boş Randevu Saati — Medalize",
@@ -328,7 +328,7 @@
     "ru": {
       "subject": "Напоминание о приёме — Medalize",
       "title": "Напоминание о приёме",
-      "body": "Напоминание: приём у врача {doctor_name} в {date_str}."
+      "body": "Напоминание: приём у врача {doctor_name} {date_str}."
     },
     "az": {
       "subject": "Qəbul xatırlatması — Medalize",
@@ -360,7 +360,7 @@
     "ru": {
       "subject": "Напоминание о приёме — Medalize",
       "title": "Напоминание о приёме",
-      "body": "Напоминание: приём с пациентом {patient_name} в {date_str}."
+      "body": "Напоминание: приём с пациентом {patient_name} {date_str}."
     },
     "az": {
       "subject": "Qəbul xatırlatması — Medalize",
