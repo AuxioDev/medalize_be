@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.users.i18n import specialization_label, viewer_language
 from apps.users.models import DoctorProfile
 from .models import BlockedPeriod, Workplace, WorkingHours
 
@@ -35,9 +36,7 @@ class DoctorProfileWriteSerializer(serializers.ModelSerializer):
 
 
 class DoctorProfileReadSerializer(serializers.ModelSerializer):
-    specialization_display = serializers.CharField(
-        source='get_specialization_display', read_only=True
-    )
+    specialization_display = serializers.SerializerMethodField()
     has_diploma = serializers.SerializerMethodField()
 
     class Meta:
@@ -48,6 +47,9 @@ class DoctorProfileReadSerializer(serializers.ModelSerializer):
             'is_verified', 'onboarding_step', 'onboarding_complete', 'has_diploma',
         ]
         read_only_fields = fields
+
+    def get_specialization_display(self, obj):
+        return specialization_label(obj.specialization, viewer_language(self.context))
 
     def get_has_diploma(self, obj):
         return bool(obj.diploma_file)

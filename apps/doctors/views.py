@@ -297,14 +297,14 @@ class DoctorProfileView(APIView):
 
     def get(self, request):
         profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
-        return Response(DoctorProfileReadSerializer(profile).data)
+        return Response(DoctorProfileReadSerializer(profile, context={'request': request}).data)
 
     def patch(self, request):
         profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
         serializer = DoctorProfileWriteSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(DoctorProfileReadSerializer(profile).data)
+        return Response(DoctorProfileReadSerializer(profile, context={'request': request}).data)
 
 
 class OnboardingCompleteView(APIView):

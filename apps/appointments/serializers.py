@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.doctors.models import BlockedPeriod, WorkingHours, Workplace
+from apps.users.i18n import specialization_label, viewer_language
 from .models import Appointment, CANCELLATION_WINDOW_HOURS, Review
 
 User = get_user_model()
@@ -28,7 +29,9 @@ class DoctorBriefSerializer(serializers.Serializer):
 
     def get_specialization_display(self, obj):
         try:
-            return obj.doctor_profile.get_specialization_display()
+            return specialization_label(
+                obj.doctor_profile.specialization, viewer_language(self.context)
+            )
         except Exception:
             return ''
 
@@ -282,7 +285,9 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
 
     def get_specialization_display(self, obj):
         try:
-            return obj.doctor_profile.get_specialization_display()
+            return specialization_label(
+                obj.doctor_profile.specialization, viewer_language(self.context)
+            )
         except Exception:
             return ''
 

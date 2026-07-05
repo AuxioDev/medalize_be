@@ -349,7 +349,9 @@ class PatientAppointmentListCreateView(APIView):
         paginator = PageNumberPagination()
         paginator.page_size = 20
         page = paginator.paginate_queryset(qs, request)
-        return paginator.get_paginated_response(AppointmentSerializer(page, many=True).data)
+        return paginator.get_paginated_response(
+            AppointmentSerializer(page, many=True, context={'request': request}).data
+        )
 
     def post(self, request):
         serializer = BookingSerializer(data=request.data, context={'request': request})
@@ -397,7 +399,8 @@ class PatientAppointmentListCreateView(APIView):
             AppointmentSerializer(
                 Appointment.objects.select_related(
                     'doctor', 'doctor__doctor_profile', 'patient', 'workplace'
-                ).get(pk=appointment.pk)
+                ).get(pk=appointment.pk),
+                context={'request': request},
             ).data,
             status=status.HTTP_201_CREATED,
         )
@@ -417,7 +420,9 @@ class PatientAppointmentDetailView(APIView):
             raise NotFound()
 
     def get(self, request, pk):
-        return Response(AppointmentSerializer(self._get(pk, request.user)).data)
+        return Response(
+            AppointmentSerializer(self._get(pk, request.user), context={'request': request}).data
+        )
 
     def delete(self, request, pk):
         appointment = self._get(pk, request.user)
@@ -592,7 +597,7 @@ class PatientAppointmentRescheduleView(APIView):
         except Exception:
             logger.exception('Failed to enqueue reschedule notification for appointment %s', appointment.id)
 
-        return Response(AppointmentSerializer(appointment).data)
+        return Response(AppointmentSerializer(appointment, context={'request': request}).data)
 
 
 class DoctorAppointmentListView(APIView):
@@ -622,7 +627,9 @@ class DoctorAppointmentListView(APIView):
         paginator = PageNumberPagination()
         paginator.page_size = 20
         page = paginator.paginate_queryset(qs, request)
-        return paginator.get_paginated_response(AppointmentSerializer(page, many=True).data)
+        return paginator.get_paginated_response(
+            AppointmentSerializer(page, many=True, context={'request': request}).data
+        )
 
 
 class DoctorAppointmentDetailView(APIView):
@@ -637,7 +644,7 @@ class DoctorAppointmentDetailView(APIView):
             )
         except Appointment.DoesNotExist:
             raise NotFound()
-        return Response(AppointmentSerializer(appointment).data)
+        return Response(AppointmentSerializer(appointment, context={'request': request}).data)
 
 
 class DoctorAppointmentStatusView(APIView):
@@ -718,7 +725,7 @@ class DoctorAppointmentStatusView(APIView):
         except Exception:
             logger.exception('Failed to enqueue status notification for appointment %s', appointment.id)
 
-        return Response(AppointmentSerializer(appointment).data)
+        return Response(AppointmentSerializer(appointment, context={'request': request}).data)
 
 
 class DoctorAppointmentNotesView(APIView):
@@ -738,7 +745,7 @@ class DoctorAppointmentNotesView(APIView):
         serializer.is_valid(raise_exception=True)
         appointment.notes = serializer.validated_data['notes']
         appointment.save(update_fields=['notes', 'updated_at'])
-        return Response(AppointmentSerializer(appointment).data)
+        return Response(AppointmentSerializer(appointment, context={'request': request}).data)
 
 
 class AppointmentReviewView(APIView):

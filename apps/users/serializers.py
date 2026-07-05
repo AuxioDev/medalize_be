@@ -8,6 +8,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.settings import api_settings
 from django.contrib.auth.models import update_last_login
 
+from .i18n import specialization_label, viewer_language
 from .models import DoctorProfile, EmailChangeRequest, PatientProfile, PasswordResetOTP, UserDevice
 from .tokens import MedalizeRefreshToken
 
@@ -120,9 +121,7 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
         choices=DoctorProfile.SPECIALIZATION_CHOICES,
         allow_blank=False,
     )
-    specialization_display = serializers.CharField(
-        source='get_specialization_display', read_only=True
-    )
+    specialization_display = serializers.SerializerMethodField()
 
     class Meta:
         model = DoctorProfile
@@ -131,13 +130,16 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
             'slot_duration_min', 'consultation_fee', 'cancellation_window_hours',
         ]
 
+    def get_specialization_display(self, obj):
+        return specialization_label(obj.specialization, viewer_language(self.context))
+
 
 class MeSerializer(serializers.ModelSerializer):
     user_id = serializers.UUIDField(source='id', read_only=True)
 
     class Meta:
         model = User
-        fields = ['user_id', 'email', 'role', 'first_name', 'last_name', 'phone']
+        fields = ['user_id', 'email', 'role', 'first_name', 'last_name', 'phone', 'language']
         read_only_fields = ['user_id', 'email', 'role']
 
     def validate_phone(self, value):
@@ -161,7 +163,7 @@ class MeSerializer(serializers.ModelSerializer):
                 data['is_verified'] = profile.is_verified
                 data['onboarding_step'] = profile.onboarding_step
                 data['onboarding_complete'] = profile.onboarding_complete
-                data['profile'] = DoctorProfileSerializer(profile).data
+                data['profile'] = DoctorProfileSerializer(profile, context={'request': request}).data
             except DoctorProfile.DoesNotExist:
                 data['is_verified'] = False
                 data['onboarding_step'] = 1
