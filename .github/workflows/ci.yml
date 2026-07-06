@@ -24,8 +24,11 @@ jobs:
           --health-retries 5
 
     env:
-      SECRET_KEY: ci-secret-key
-      JWT_SECRET_KEY: ci-jwt-secret
+      # Must be ≥50 chars and distinct from each other — config/settings.py
+      # enforces this unconditionally (see _validate_secret/_validate_secrets_distinct),
+      # so short placeholder secrets fail at Django import time, not just in prod.
+      SECRET_KEY: ci-secret-key-not-for-production-use-only-padding-to-reach-fifty-chars
+      JWT_SECRET_KEY: ci-jwt-secret-not-for-production-use-only-padding-to-reach-fifty-chars
       DEBUG: 'True'
       DB_NAME: medalize_db
       DB_USER: postgres
@@ -45,4 +48,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests
-        run: python manage.py test
+        # test_settings swaps cache/email to in-process backends so CI doesn't
+        # need a Redis/SMTP service alongside Postgres.
+        run: python manage.py test --settings=config.test_settings
