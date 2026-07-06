@@ -16,6 +16,7 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
+    from django.conf.urls.static import static
     from django.views.generic import RedirectView
     from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
@@ -24,3 +25,8 @@ if settings.DEBUG:
         path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
         path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     ]
+    # Dev-only: serves uploaded avatars/diplomas from local disk (MEDIA_ROOT).
+    # Production never hits this branch — nginx serves /media/ directly from
+    # the shared volume (see docker-compose.yml + nginx/default.conf), or
+    # Cloudinary serves it from its CDN when USE_CLOUDINARY is configured.
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

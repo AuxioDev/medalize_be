@@ -39,6 +39,12 @@ services:
     environment:
       DB_HOST: db
       REDIS_URL: redis://redis:6379/0
+    volumes:
+      # Persists uploaded avatars/diplomas across rebuilds and lets nginx
+      # serve them directly (see nginx/default.conf). Only used when
+      # USE_CLOUDINARY is unset — irrelevant once Cloudinary is configured,
+      # but harmless to keep mounted either way.
+      - media_data:/app/media
     command: >-
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
@@ -59,6 +65,7 @@ services:
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
+      - media_data:/app/media:ro
     depends_on:
       - web
     restart: unless-stopped
@@ -91,3 +98,4 @@ services:
 
 volumes:
   pgdata:
+  media_data:
