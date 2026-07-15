@@ -1,10 +1,16 @@
 from rest_framework import serializers
 
-from .models import FCMToken, Notification
+from .models import FCMToken, Notification, NotificationPreference
 
 
 class FCMTokenSerializer(serializers.Serializer):
     token = serializers.CharField(max_length=500)
+
+
+class NotificationPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationPreference
+        fields = ['push_enabled', 'email_enabled']
 
 
 class NotificationSerializer(serializers.ModelSerializer):

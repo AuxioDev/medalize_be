@@ -5,8 +5,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import FCMToken, Notification
-from .serializers import FCMTokenSerializer, NotificationSerializer
+from .models import FCMToken, Notification, NotificationPreference
+from .serializers import (
+    FCMTokenSerializer,
+    NotificationPreferenceSerializer,
+    NotificationSerializer,
+)
 
 
 _FCM_TOKEN_LIMIT = 10
@@ -104,3 +108,18 @@ class NotificationReadAllView(APIView):
     def post(self, request):
         updated = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({'marked_read': updated})
+
+
+class NotificationPreferenceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        return Response(NotificationPreferenceSerializer(prefs).data)
+
+    def patch(self, request):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        serializer = NotificationPreferenceSerializer(prefs, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

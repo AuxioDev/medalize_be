@@ -22,21 +22,32 @@ def _display_name(user):
     return f'{user.first_name} {user.last_name}'.strip() or user.email
 
 
-def _send_email(subject, message, recipient_email):
+def _prefs_for(user):
+    from .models import NotificationPreference
+    prefs, _ = NotificationPreference.objects.get_or_create(user=user)
+    return prefs
+
+
+def _send_email(subject, message, user):
+    if not _prefs_for(user).email_enabled:
+        return
     try:
         send_mail(
             subject=subject,
             message=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[recipient_email],
+            recipient_list=[user.email],
             fail_silently=False,
         )
     except Exception:
-        logger.exception('Failed to send email to %s', recipient_email)
+        logger.exception('Failed to send email to %s', user.email)
 
 
 def _send_push(user, title, body, data=None):
-    """Send FCM push to all registered tokens for user. No-op if Firebase not configured."""
+    """Send FCM push to all registered tokens for user. No-op if Firebase not configured
+    or the user has disabled push notifications."""
+    if not _prefs_for(user).push_enabled:
+        return
     if not getattr(settings, 'FIREBASE_CREDENTIALS_JSON', ''):
         return
     try:
@@ -73,7 +84,7 @@ def deliver_email_and_push(user_id, subject, title, message, data=None):
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         return
-    _send_email(subject, message, user.email)
+    _send_email(subject, message, user)
     _send_push(user, title, message, data=data or {})
 
 
@@ -99,7 +110,7 @@ def send_booking_confirmed(appointment_id):
         title=tpl['title'],
         message=tpl['body'],
     )
-    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_email(tpl['subject'], tpl['body'], appt.patient)
     _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
@@ -126,7 +137,7 @@ def send_booking_declined(appointment_id):
         title=tpl['title'],
         message=tpl['body'],
     )
-    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_email(tpl['subject'], tpl['body'], appt.patient)
     _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
@@ -166,8 +177,8 @@ def send_booking_cancelled(appointment_id):
             message=doctor_tpl['body'],
         ),
     ])
-    _send_email(patient_tpl['subject'], patient_tpl['body'], appt.patient.email)
-    _send_email(doctor_tpl['subject'], doctor_tpl['body'], appt.doctor.email)
+    _send_email(patient_tpl['subject'], patient_tpl['body'], appt.patient)
+    _send_email(doctor_tpl['subject'], doctor_tpl['body'], appt.doctor)
     push_data = {'type': 'appointment', 'appointment_id': str(appt.id)}
     _send_push(appt.patient, patient_tpl['title'], patient_tpl['body'], data=push_data)
     _send_push(appt.doctor, doctor_tpl['title'], doctor_tpl['body'], data=push_data)
@@ -195,7 +206,7 @@ def send_rescheduling_required(appointment_id):
         title=tpl['title'],
         message=tpl['body'],
     )
-    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_email(tpl['subject'], tpl['body'], appt.patient)
     _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
@@ -236,8 +247,8 @@ def send_appointment_rescheduled(appointment_id):
             message=patient_tpl['body'],
         ),
     ])
-    _send_email(doctor_tpl['subject'], doctor_tpl['body'], appt.doctor.email)
-    _send_email(patient_tpl['subject'], patient_tpl['body'], appt.patient.email)
+    _send_email(doctor_tpl['subject'], doctor_tpl['body'], appt.doctor)
+    _send_email(patient_tpl['subject'], patient_tpl['body'], appt.patient)
     _send_push(appt.doctor, doctor_tpl['title'], doctor_tpl['body'], data=push_data)
     _send_push(appt.patient, patient_tpl['title'], patient_tpl['body'], data=push_data)
 
@@ -264,7 +275,7 @@ def send_booking_no_show(appointment_id):
         title=tpl['title'],
         message=tpl['body'],
     )
-    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_email(tpl['subject'], tpl['body'], appt.patient)
     _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
@@ -285,7 +296,7 @@ def send_doctor_verified(user_id):
         title=tpl['title'],
         message=tpl['body'],
     )
-    _send_email(tpl['subject'], tpl['body'], user.email)
+    _send_email(tpl['subject'], tpl['body'], user)
     _send_push(user, tpl['title'], tpl['body'])
 
 
@@ -443,7 +454,7 @@ def send_appointment_completed(appointment_id):
         title=tpl['title'],
         message=tpl['body'],
     )
-    _send_email(tpl['subject'], tpl['body'], appt.patient.email)
+    _send_email(tpl['subject'], tpl['body'], appt.patient)
     _send_push(appt.patient, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 
@@ -471,7 +482,7 @@ def send_new_booking_pending(appointment_id):
         title=tpl['title'],
         message=tpl['body'],
     )
-    _send_email(tpl['subject'], tpl['body'], appt.doctor.email)
+    _send_email(tpl['subject'], tpl['body'], appt.doctor)
     _send_push(appt.doctor, tpl['title'], tpl['body'],
                data={'type': 'appointment', 'appointment_id': str(appt.id)})
 

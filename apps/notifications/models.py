@@ -55,3 +55,16 @@ class Notification(models.Model):
 
     def __str__(self):
         return f'{self.user.email} — {self.title}'
+
+
+class NotificationPreference(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notification_preference',
+    )
+    push_enabled = models.BooleanField(default=True)
+    email_enabled = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f'{self.user.email} preferences'

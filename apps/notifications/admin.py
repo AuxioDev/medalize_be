@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import FCMToken, Notification
+from .models import FCMToken, Notification, NotificationPreference
 
 
 @admin.register(Notification)
@@ -13,4 +13,10 @@ class NotificationAdmin(admin.ModelAdmin):
 @admin.register(FCMToken)
 class FCMTokenAdmin(admin.ModelAdmin):
     list_display = ['user', 'token', 'created_at']
+    search_fields = ['user__email']
+
+
+@admin.register(NotificationPreference)
+class NotificationPreferenceAdmin(admin.ModelAdmin):
+    list_display = ['user', 'push_enabled', 'email_enabled']
     search_fields = ['user__email']
