@@ -119,7 +119,15 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+# Single-market assumption: doctors, patients and workplaces are all treated
+# as being in this one timezone. Working hours (WorkingHours.start_time/
+# end_time) are naive times combined with a date via timezone.make_aware(),
+# which uses this setting as the "current timezone" — so this value must
+# match where doctors actually practice, not UTC, or a doctor entering
+# "09:00" has it silently stored/interpreted as 09:00 in the wrong zone. If
+# Medalize ever expands to doctors/hospitals in genuinely different
+# timezones, this needs to become a per-workplace field instead.
+TIME_ZONE = env('TIME_ZONE', default='Asia/Baku')
 USE_I18N = True
 USE_TZ = True
 

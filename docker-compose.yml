@@ -64,6 +64,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/admin_allowlist.conf:/etc/nginx/admin_allowlist.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
       - media_data:/app/media:ro
     depends_on:
