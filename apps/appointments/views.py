@@ -119,7 +119,7 @@ class DoctorListView(APIView):
     def get(self, request):
         qs = (
             User.objects
-            .filter(role=User.ROLE_DOCTOR, doctor_profile__is_verified=True)
+            .filter(role=User.ROLE_DOCTOR, is_active=True, doctor_profile__is_verified=True)
             .select_related('doctor_profile')
             .prefetch_related('workplaces')
             .annotate(
@@ -228,7 +228,7 @@ class DoctorDetailView(APIView):
         try:
             doctor = (
                 User.objects
-                .filter(role='doctor', doctor_profile__is_verified=True)
+                .filter(role='doctor', is_active=True, doctor_profile__is_verified=True)
                 .select_related('doctor_profile')
                 .prefetch_related('workplaces__working_hours')
                 .get(pk=pk)
@@ -257,7 +257,7 @@ class SlotListView(APIView):
 
         try:
             doctor = User.objects.select_related('doctor_profile').get(
-                pk=pk, role='doctor', doctor_profile__is_verified=True
+                pk=pk, role='doctor', is_active=True, doctor_profile__is_verified=True
             )
         except User.DoesNotExist:
             raise NotFound()
@@ -467,7 +467,7 @@ class DoctorNextSlotView(APIView):
     def get(self, request, pk):
         try:
             doctor = User.objects.select_related('doctor_profile').get(
-                pk=pk, role='doctor', doctor_profile__is_verified=True
+                pk=pk, role='doctor', is_active=True, doctor_profile__is_verified=True
             )
         except User.DoesNotExist:
             raise NotFound()
@@ -838,7 +838,7 @@ class WaitlistView(APIView):
             raise ValidationError({'doctor_id': 'This field is required.'})
         try:
             doctor = User.objects.get(
-                pk=doctor_id, role=User.ROLE_DOCTOR, doctor_profile__is_verified=True
+                pk=doctor_id, role=User.ROLE_DOCTOR, is_active=True, doctor_profile__is_verified=True
             )
         except (User.DoesNotExist, ValueError):
             raise NotFound('Doctor not found.')
@@ -888,7 +888,7 @@ class FavoriteListCreateView(APIView):
             raise ValidationError({'doctor_id': 'This field is required.'})
         try:
             doctor = User.objects.get(
-                pk=doctor_id, role=User.ROLE_DOCTOR, doctor_profile__is_verified=True
+                pk=doctor_id, role=User.ROLE_DOCTOR, is_active=True, doctor_profile__is_verified=True
             )
         except (User.DoesNotExist, ValueError):
             raise NotFound('Doctor not found.')

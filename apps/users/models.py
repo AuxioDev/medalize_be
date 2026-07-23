@@ -10,16 +10,17 @@ logger = logging.getLogger(__name__)
 
 
 def diploma_storage():
-    """Storage for doctor diplomas. Uses Cloudinary's raw storage (handles any
-    file type — PDF, docs, images) when Cloudinary is configured, else the
-    default local storage. A callable keeps the migration stable across
-    environments regardless of which backend is active."""
+    """Storage for doctor diplomas. Uses Cloudinary's private/authenticated
+    raw storage (handles any file type — PDF, docs, images, signed URLs
+    only) when Cloudinary is configured, else the default local storage. A
+    callable keeps the migration stable across environments regardless of
+    which backend is active."""
     from django.conf import settings
 
     if getattr(settings, 'USE_CLOUDINARY', False):
-        from cloudinary_storage.storage import RawMediaCloudinaryStorage
+        from apps.core.storage import PrivateRawCloudinaryStorage
 
-        return RawMediaCloudinaryStorage()
+        return PrivateRawCloudinaryStorage()
     from django.core.files.storage import default_storage
 
     return default_storage
@@ -64,6 +65,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         ('fr', 'French'),
         ('zh', 'Chinese'),
     ]
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._original_is_active = instance.is_active
+        return instance
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, max_length=255)
@@ -255,6 +262,50 @@ def create_role_profile(sender, instance, created, **kwargs):
         PatientProfile.objects.create(user=instance)
 
 
+def cancel_future_appointments_for_doctor(doctor):
+    """Auto-cancel this doctor's future pending/confirmed appointments and
+    notify the affected patients. Called whenever a doctor becomes unbookable
+    (deactivated or loses verification) so patients aren't left holding a
+    booking nobody can act on. Reuses the existing booking-cancelled
+    notification path rather than a bespoke message."""
+    from django.core.cache import cache
+    from django.utils import timezone
+    from apps.appointments.models import Appointment
+
+    appointments = list(
+        Appointment.objects.filter(
+            doctor=doctor,
+            status__in=[Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED],
+            starts_at__gt=timezone.now(),
+        )
+    )
+    if not appointments:
+        return
+
+    Appointment.objects.filter(pk__in=[a.pk for a in appointments]).update(
+        status=Appointment.STATUS_CANCELLED, updated_at=timezone.now()
+    )
+
+    from apps.notifications.tasks import send_booking_cancelled
+    for appt in appointments:
+        cache.delete(f'slots:{appt.doctor_id}:{appt.workplace_id}:{appt.starts_at.date()}')
+        try:
+            send_booking_cancelled.delay(str(appt.id))
+        except Exception:
+            logger.exception(
+                'Failed to enqueue cancellation notification for appointment %s', appt.id
+            )
+
+
+@receiver(post_save, sender=User)
+def cancel_appointments_on_deactivation(sender, instance, created, **kwargs):
+    if created or instance.role != User.ROLE_DOCTOR:
+        return
+    original = getattr(instance, '_original_is_active', None)
+    if original is True and instance.is_active is False:
+        cancel_future_appointments_for_doctor(instance)
+
+
 @receiver(post_save, sender=DoctorProfile)
 def notify_doctor_verified(sender, instance, created, **kwargs):
     if created:
@@ -266,3 +317,5 @@ def notify_doctor_verified(sender, instance, created, **kwargs):
             send_doctor_verified.delay(instance.user_id)
         except Exception:
             logger.exception('Failed to dispatch verification notification for doctor %s', instance.user_id)
+    elif original is True and instance.is_verified is False:
+        cancel_future_appointments_for_doctor(instance.user)

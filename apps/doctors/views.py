@@ -15,6 +15,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.uploads import randomize_upload_filename
 from apps.users.models import DoctorProfile
 from apps.users.permissions import IsDoctor, IsDoctorVerified
 
@@ -362,18 +363,27 @@ class DiplomaUploadView(APIView):
         # stored and later served to admins reviewing diplomas.
         header = file.read(8)
         file.seek(0)
-        if not header.startswith(b'%PDF-'):
+        if header.startswith(b'%PDF-'):
+            extension = 'pdf'
+        else:
             try:
                 img = Image.open(BytesIO(file.read()))
                 if img.format not in ('JPEG', 'PNG'):
                     raise ValidationError({'diploma': 'Only PDF, JPEG or PNG files are allowed.'})
                 img.load()
+                extension = 'jpg' if img.format == 'JPEG' else 'png'
             except ValidationError:
                 raise
             except Exception:
                 raise ValidationError({'diploma': 'Only PDF, JPEG or PNG files are allowed.'})
             finally:
                 file.seek(0)
+
+        # Discard the client-supplied filename/extension now that the real
+        # type is known — prevents storing validated-PDF bytes under a
+        # client-chosen .html/.svg extension that would be served with a
+        # mismatched, exploitable Content-Type.
+        randomize_upload_filename(file, extension)
 
         profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
         old_diploma = profile.diploma_file

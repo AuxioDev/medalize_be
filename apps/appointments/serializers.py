@@ -127,7 +127,7 @@ class BookingSerializer(serializers.Serializer):
     def validate(self, attrs):
         try:
             doctor = User.objects.select_related('doctor_profile').get(
-                pk=attrs['doctor_id'], role='doctor', doctor_profile__is_verified=True
+                pk=attrs['doctor_id'], role='doctor', is_active=True, doctor_profile__is_verified=True
             )
         except User.DoesNotExist:
             raise serializers.ValidationError({'doctor_id': 'Doctor not found.'})

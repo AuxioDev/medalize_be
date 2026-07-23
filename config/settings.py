@@ -277,6 +277,12 @@ LOGGING = {
 CLOUDINARY_CLOUD_NAME = env('CLOUDINARY_CLOUD_NAME', default='')
 CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default='')
 CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default='')
+# Optional: a Cloudinary "token-based authentication" key (Console > Settings
+# > Security), separate from the API secret above. When set, diploma/avatar
+# URLs carry a genuinely time-limited (5 min) signed token instead of just a
+# non-expiring path signature. Safe to leave blank — URLs are still signed
+# and un-guessable either way, see apps/core/storage.py.
+CLOUDINARY_AUTH_TOKEN_KEY = env('CLOUDINARY_AUTH_TOKEN_KEY', default='')
 
 USE_CLOUDINARY = bool(
     CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET
@@ -297,7 +303,7 @@ if USE_CLOUDINARY:
         api_secret=CLOUDINARY_API_SECRET,
         secure=True,
     )
-    _DEFAULT_FILE_BACKEND = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    _DEFAULT_FILE_BACKEND = 'apps.core.storage.PrivateImageCloudinaryStorage'
 else:
     _DEFAULT_FILE_BACKEND = 'django.core.files.storage.FileSystemStorage'
 

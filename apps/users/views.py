@@ -12,6 +12,8 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 from PIL import Image
+
+from apps.core.uploads import randomize_upload_filename
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser
@@ -603,12 +605,17 @@ class AvatarUploadView(APIView):
             # Force full pixel decode — verify() only checks the header and
             # would pass specially crafted files that fail on actual decode.
             img.load()
+            extension = 'jpg' if img.format == 'JPEG' else 'png'
         except ValidationError:
             raise
         except Exception:
             raise ValidationError({'avatar': 'Only JPEG or PNG files are allowed.'})
         finally:
             file.seek(0)
+
+        # Discard the client-supplied filename/extension now that the real
+        # type is known — same fix as diploma uploads.
+        randomize_upload_filename(file, extension)
 
         # Remove the previous avatar so replaced files don't accumulate in storage.
         old_avatar = request.user.avatar
