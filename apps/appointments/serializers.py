@@ -331,11 +331,14 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
             return 30
 
     def get_primary_workplace(self, obj):
-        wp = obj.workplaces.filter(is_primary=True).first()
-        if not wp:
-            wp = obj.workplaces.first()
-        if not wp:
+        # obj.workplaces.all() reuses the prefetch_related('workplaces') cache
+        # from the queryset (DoctorListView/FavoriteListCreateView) — filtering
+        # via .filter()/.first() instead would issue a fresh query per doctor,
+        # defeating the prefetch and reintroducing N+1.
+        workplaces = list(obj.workplaces.all())
+        if not workplaces:
             return None
+        wp = next((w for w in workplaces if w.is_primary), workplaces[0])
         return {'id': str(wp.id), 'name': wp.name, 'city': wp.city, 'address': wp.address}
 
     def get_average_rating(self, obj):

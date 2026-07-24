@@ -89,6 +89,28 @@ def deliver_email_and_push(user_id, subject, title, message, data=None):
 
 
 @shared_task
+def send_transactional_email(subject, message, recipient_email):
+    """Security/account emails — password-reset codes, new-device login
+    alerts, email-change codes and confirmations — that must always be
+    delivered regardless of the recipient's discretionary notification
+    preferences (unlike deliver_email_and_push, this never checks
+    NotificationPreference.email_enabled). Takes the address directly rather
+    than a user_id since some of these intentionally go to an address other
+    than the account's current email (the new address being verified, or the
+    old one being alerted of a change)."""
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient_email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception('Failed to send transactional email to %s', recipient_email)
+
+
+@shared_task
 def send_booking_confirmed(appointment_id):
     from apps.appointments.models import Appointment
     from .models import Notification

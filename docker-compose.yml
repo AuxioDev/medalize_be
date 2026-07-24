@@ -1,7 +1,7 @@
 # Full stack: API + Postgres + Redis + Celery worker + Nginx (TLS).
 #
 # Setup on a fresh VPS:
-#   1. cp .env.example .env  (fill SECRET_KEY, JWT_SECRET_KEY, DB_PASSWORD, …)
+#   1. cp .env.example .env  (fill SECRET_KEY, JWT_SECRET_KEY, DB_PASSWORD, REDIS_PASSWORD, …)
 #   2. mkdir -p nginx/certs
 #   3. docker compose up --build -d web db redis   # start without nginx first
 #   4. certbot certonly --standalone -d yourdomain.com
@@ -16,7 +16,11 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-medalize_db}
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      # No fallback: a silently-applied "postgres" password on a real DB is
+      # exactly the kind of misconfiguration that should fail loud at
+      # startup, not work by accident (see SECRET_KEY/JWT_SECRET_KEY in
+      # config/settings.py for the same fail-loud pattern).
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -27,8 +31,11 @@ services:
 
   redis:
     image: redis:7
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command: sh -c 'exec redis-server --requirepass "$$REDIS_PASSWORD"'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,7 +45,7 @@ services:
     env_file: .env
     environment:
       DB_HOST: db
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0
     volumes:
       # Persists uploaded avatars/diplomas across rebuilds and lets nginx
       # serve them directly (see nginx/default.conf). Only used when
@@ -56,6 +63,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -68,7 +82,8 @@ services:
       - ./nginx/certs:/etc/nginx/certs:ro
       - media_data:/app/media:ro
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     restart: unless-stopped
 
   worker:
@@ -76,13 +91,14 @@ services:
     env_file: .env
     environment:
       DB_HOST: db
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0
     command: celery -A config worker -l info
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
   # Scheduled tasks: appointment reminders, auto-complete past appointments
   # (see CELERY_BEAT_SCHEDULE in config/settings.py).
@@ -91,11 +107,14 @@ services:
     env_file: .env
     environment:
       DB_HOST: db
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0
     command: celery -A config beat -l info
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:

@@ -78,7 +78,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=150, blank=True)
     phone = models.CharField(max_length=20, blank=True)
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    # Indexed: filtered on nearly every doctor-facing search/booking query.
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, db_index=True)
     # Preferred UI/notification language, kept in sync by the mobile app.
     language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default='en')
     is_active = models.BooleanField(default=True)
@@ -124,18 +125,21 @@ class DoctorProfile(models.Model):
     ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='doctor_profile')
+    # Indexed: exact-match filtered on doctor search.
     specialization = models.CharField(
         max_length=50,
         choices=SPECIALIZATION_CHOICES,
         default='general_practice',
         blank=True,
+        db_index=True,
     )
     license_number = models.CharField(max_length=100, blank=True)
     bio = models.TextField(blank=True)
     diploma_file = models.FileField(
         upload_to='diplomas/', null=True, blank=True, storage=diploma_storage
     )
-    is_verified = models.BooleanField(default=False)
+    # Indexed: filtered on nearly every doctor-facing search/booking query.
+    is_verified = models.BooleanField(default=False, db_index=True)
     onboarding_step = models.PositiveIntegerField(default=1)
     onboarding_complete = models.BooleanField(default=False)
     slot_duration_min = models.PositiveIntegerField(default=30)
@@ -200,6 +204,13 @@ class UserDevice(models.Model):
     # jti of the most recent refresh token issued to this device — lets us
     # blacklist exactly this device's session via the token_blacklist app.
     jti = models.CharField(max_length=64, blank=True)
+    # jti this device's token was rotated away from, if any. Lets refresh-
+    # token-reuse detection (apps/users/views.py::_detect_refresh_reuse)
+    # confirm a presented, already-blacklisted jti was specifically
+    # rotated-away-from-legitimately (real reuse/theft) rather than
+    # blacklisted for an unrelated reason (e.g. explicit device revocation),
+    # which would otherwise look identical from blacklist state alone.
+    previous_jti = models.CharField(max_length=64, blank=True, db_index=True)
     last_seen_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
 

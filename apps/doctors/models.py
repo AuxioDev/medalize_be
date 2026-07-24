@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -29,6 +30,11 @@ class Workplace(models.Model):
 
     class Meta:
         ordering = ['-is_primary', 'name']
+        indexes = [
+            # Doctor search filters city with icontains — a plain B-tree
+            # index can't accelerate that; trigram + GIN does.
+            GinIndex(fields=['city'], name='workplace_city_trgm_idx', opclasses=['gin_trgm_ops']),
+        ]
 
     def __str__(self):
         return f'{self.name} ({self.city})'

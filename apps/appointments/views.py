@@ -37,13 +37,31 @@ from .serializers import (
 User = get_user_model()
 
 
+_NEXT_SLOT_CACHE_MISS = object()
+
+
 def find_next_slot_at(doctor):
     """First free slot start (aware datetime) within 14 days, or None.
 
     Shared by DoctorNextSlotView and DoctorListView (ordering=next_slot).
-    Pre-fetches all data for the window in 3 queries instead of running up
-    to 42 individual queries (one per day × 3 models).
+    Cached the same way SlotListView caches a single day's slots (300s TTL,
+    invalidated on every booking/cancel/decline/reschedule) — this used to
+    recompute uncached on every call, up to 20x per doctor-list page load.
+    A sentinel (not None) marks a cache miss, since "no slot in 14 days" is
+    itself a valid, legitimately-cacheable result.
     """
+    cache_key = f'next_slot:{doctor.id}'
+    cached = cache.get(cache_key, _NEXT_SLOT_CACHE_MISS)
+    if cached is not _NEXT_SLOT_CACHE_MISS:
+        return cached
+    result = _compute_next_slot_at(doctor)
+    cache.set(cache_key, result, timeout=300)
+    return result
+
+
+def _compute_next_slot_at(doctor):
+    """Pre-fetches all data for the 14-day window in 3 queries instead of
+    running up to 42 individual queries (one per day × 3 models)."""
     try:
         slot_duration = doctor.doctor_profile.slot_duration_min
     except Exception:
@@ -391,6 +409,7 @@ class PatientAppointmentListCreateView(APIView):
             f'slots:{appointment.doctor_id}:{appointment.workplace_id}'
             f':{appointment.starts_at.date()}'
         )
+        cache.delete(f'next_slot:{appointment.doctor_id}')
         try:
             from apps.notifications.tasks import send_new_booking_pending
             send_new_booking_pending.delay(str(appointment.pk))
@@ -457,6 +476,7 @@ class PatientAppointmentDetailView(APIView):
             f'slots:{appointment.doctor_id}:{appointment.workplace_id}'
             f':{appointment.starts_at.date()}'
         )
+        cache.delete(f'next_slot:{appointment.doctor_id}')
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -587,6 +607,7 @@ class PatientAppointmentRescheduleView(APIView):
 
         cache.delete(f'slots:{appointment.doctor_id}:{appointment.workplace_id}:{old_date}')
         cache.delete(f'slots:{appointment.doctor_id}:{appointment.workplace_id}:{new_starts_at.date()}')
+        cache.delete(f'next_slot:{appointment.doctor_id}')
 
         try:
             from apps.notifications.tasks import (
@@ -700,11 +721,16 @@ class DoctorAppointmentStatusView(APIView):
         appointment.status = new_status
         appointment.save(update_fields=['status', 'updated_at'])
 
-        if new_status == Appointment.STATUS_CANCELLED:
+        # DECLINED frees the slot exactly like CANCELLED does (both are
+        # excluded from occupancy checks everywhere) — the cache must be
+        # invalidated on both, not just CANCELLED, or a declined slot stays
+        # marked unavailable for up to 5 minutes after it actually freed up.
+        if new_status in (Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED):
             cache.delete(
                 f'slots:{appointment.doctor_id}:{appointment.workplace_id}'
                 f':{appointment.starts_at.date()}'
             )
+            cache.delete(f'next_slot:{appointment.doctor_id}')
 
         try:
             from apps.notifications.tasks import (

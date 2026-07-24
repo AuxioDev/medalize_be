@@ -5,8 +5,6 @@ from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
-from django.core.mail import send_mail
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -89,6 +87,38 @@ def _blacklist_jti(user, jti):
         BlacklistedToken.objects.get_or_create(token=token)
 
 
+def _detect_refresh_reuse(raw_refresh_token):
+    """Reusing a refresh token that was already rotated away means it was
+    leaked/stolen — rotation alone only rejects this one request, leaving any
+    newer token an attacker already derived from it valid. Revoke every
+    outstanding session for the user so that chain is cut too.
+
+    Matches against UserDevice.previous_jti rather than just checking
+    blacklist status: a token can be blacklisted for reasons that are
+    perfectly legitimate and not reuse at all (e.g. explicit single-device
+    revocation), and that looks identical to real reuse from blacklist state
+    alone. previous_jti is only ever set by our own rotation bookkeeping
+    (_upsert_device), so a match here is an unambiguous signal.
+
+    Decodes with verify=False purely to read the `jti` claim without a full
+    signature/expiry check — the match against our own DB is what actually
+    confirms reuse, not anything from the unverified decode itself.
+    """
+    if not raw_refresh_token:
+        return
+    try:
+        jti = RefreshToken(raw_refresh_token, verify=False).payload.get('jti')
+    except TokenError:
+        return
+    if not jti:
+        return
+    device = UserDevice.objects.filter(previous_jti=jti).select_related('user').first()
+    if device is None:
+        return
+    logger.warning('Refresh token reuse detected for user %s — revoking all sessions', device.user_id)
+    _revoke_all_sessions(device.user)
+
+
 def _request_device_id(request):
     return str(request.headers.get('X-Device-Id') or request.data.get('device_id') or '').strip()
 
@@ -102,13 +132,25 @@ def _upsert_device(user, refresh_token, data):
     device_id = str(data.get('device_id') or '').strip()[:255]
     if not device_id:
         return
-    defaults = {'jti': str(refresh_token['jti']), 'last_seen_at': timezone.now()}
+    new_jti = str(refresh_token['jti'])
+    defaults = {'jti': new_jti, 'last_seen_at': timezone.now()}
     device_name = str(data.get('device_name') or '').strip()[:255]
     platform = str(data.get('platform') or '').strip()
     if device_name:
         defaults['device_name'] = device_name
     if platform in (UserDevice.PLATFORM_IOS, UserDevice.PLATFORM_ANDROID):
         defaults['platform'] = platform
+
+    existing_jti = (
+        UserDevice.objects.filter(user=user, device_id=device_id)
+        .values_list('jti', flat=True)
+        .first()
+    )
+    if existing_jti and existing_jti != new_jti:
+        # Rotated, not just re-seen — record what it rotated away from so
+        # _detect_refresh_reuse can recognize a replay of it later.
+        defaults['previous_jti'] = existing_jti
+
     device, created = UserDevice.objects.update_or_create(
         user=user, device_id=device_id, defaults=defaults
     )
@@ -120,15 +162,10 @@ def _upsert_device(user, refresh_token, data):
                 platform=device.get_platform_display() or 'Unknown',
                 time=timezone.now().strftime('%d.%m.%Y %H:%M'),
             )
-            send_mail(
-                subject=tpl['subject'],
-                message=tpl['body'],
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=False,
-            )
+            from apps.notifications.tasks import send_transactional_email
+            send_transactional_email.delay(tpl['subject'], tpl['body'], user.email)
         except Exception:
-            logger.exception('Failed to send new device alert email to user %s', user.pk)
+            logger.exception('Failed to enqueue new device alert email for user %s', user.pk)
 
 
 class RegisterView(APIView):
@@ -168,6 +205,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 class CustomTokenRefreshView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
+        _detect_refresh_reuse(request.data.get('refresh'))
         response = super().post(request, *args, **kwargs)
         if response.status_code == 200:
             from rest_framework_simplejwt.tokens import AccessToken
@@ -415,15 +453,10 @@ class PasswordResetRequestView(APIView):
                     tpl = render_template(
                         'password_reset_code', recipient_language(user), code=otp_code
                     )
-                    send_mail(
-                        subject=tpl['subject'],
-                        message=tpl['body'],
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[user.email],
-                        fail_silently=False,
-                    )
+                    from apps.notifications.tasks import send_transactional_email
+                    send_transactional_email.delay(tpl['subject'], tpl['body'], user.email)
                 except Exception:
-                    logger.exception('Failed to send password reset email')
+                    logger.exception('Failed to enqueue password reset email')
         except User.DoesNotExist:
             pass
 
@@ -513,15 +546,10 @@ class EmailChangeRequestView(APIView):
                 tpl = render_template(
                     'email_change_code', recipient_language(request.user), code=code
                 )
-                send_mail(
-                    subject=tpl['subject'],
-                    message=tpl['body'],
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[new_email],
-                    fail_silently=False,
-                )
+                from apps.notifications.tasks import send_transactional_email
+                send_transactional_email.delay(tpl['subject'], tpl['body'], new_email)
             except Exception:
-                logger.exception('Failed to send email change code')
+                logger.exception('Failed to enqueue email change code')
 
         return Response({'message': 'A confirmation code has been sent to the new email address.'})
 
@@ -574,15 +602,10 @@ class EmailChangeConfirmView(APIView):
             tpl = render_template(
                 'email_changed', recipient_language(request.user), new_email=locked.new_email
             )
-            send_mail(
-                subject=tpl['subject'],
-                message=tpl['body'],
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[old_email],
-                fail_silently=False,
-            )
+            from apps.notifications.tasks import send_transactional_email
+            send_transactional_email.delay(tpl['subject'], tpl['body'], old_email)
         except Exception:
-            logger.exception('Failed to send email change notification to user %s', request.user.pk)
+            logger.exception('Failed to enqueue email change notification for user %s', request.user.pk)
 
         return Response({'message': 'Email changed successfully.', 'email': request.user.email})
 

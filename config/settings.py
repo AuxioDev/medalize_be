@@ -104,7 +104,12 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': env('DB_NAME', default='medalize_db'),
         'USER': env('DB_USER', default='postgres'),
-        'PASSWORD': env('DB_PASSWORD', default='postgres'),
+        # No fallback: docker-compose's own Postgres container also has no
+        # password fallback (see docker-compose.yml) — a forgotten
+        # DB_PASSWORD used to silently produce a real database with a known
+        # weak password ('postgres') and no error anywhere. Fail loud
+        # instead, matching SECRET_KEY/JWT_SECRET_KEY below.
+        'PASSWORD': env('DB_PASSWORD'),
         'HOST': env('DB_HOST', default='localhost'),
         'PORT': env('DB_PORT', default='5432'),
         'CONN_MAX_AGE': 60,
@@ -198,8 +203,6 @@ EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@medalize.com')
-
-FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
 
 # ── Social login (Google / Apple id_token verification) ──────────────────────
 # Comma-separated OAuth client ids accepted as `aud` in Google id_tokens
