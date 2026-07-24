@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'apps.assistant',
     'apps.medications',
     'apps.prescriptions',
+    'apps.records',
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,176 @@
+from io import BytesIO
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from apps.appointments.tests.test_appointments import _register_and_login, patient_payload
+from apps.records.models import MedicalRecord
+
+RECORDS_URL = '/api/records/'
+
+
+def _detail_url(pk):
+    return f'{RECORDS_URL}{pk}/'
+
+
+def _png_bytes():
+    buf = BytesIO()
+    Image.new('RGB', (10, 10), color='red').save(buf, format='PNG')
+    return buf.getvalue()
+
+
+def _jpeg_bytes():
+    buf = BytesIO()
+    Image.new('RGB', (10, 10), color='blue').save(buf, format='JPEG')
+    return buf.getvalue()
+
+
+def _pdf_bytes():
+    # Validation only checks the %PDF- header, matching DiplomaUploadView.
+    return b'%PDF-1.4\n%fake minimal pdf for tests\n'
+
+
+def _png_file(name='scan.png'):
+    return SimpleUploadedFile(name, _png_bytes(), content_type='image/png')
+
+
+def _jpeg_file(name='scan.jpg'):
+    return SimpleUploadedFile(name, _jpeg_bytes(), content_type='image/jpeg')
+
+
+def _pdf_file(name='report.pdf'):
+    return SimpleUploadedFile(name, _pdf_bytes(), content_type='application/pdf')
+
+
+class MedicalRecordTestBase(APITestCase):
+    def setUp(self):
+        self.patient_token = _register_and_login(self.client, patient_payload())
+        self.doctor_token = _register_and_login(
+            self.client, {
+                'email': 'doctor@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
+                'role': 'doctor', 'first_name': 'John', 'last_name': 'Smith',
+            },
+        )
+        self.as_patient()
+
+    def as_patient(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.patient_token}')
+
+    def as_doctor(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.doctor_token}')
+
+    def as_anonymous(self):
+        self.client.credentials()
+
+    def _upload(self, file, **extra):
+        data = {'title': 'Blood test', 'record_type': 'lab_result'}
+        data.update(extra)
+        data['file'] = file
+        return self.client.post(RECORDS_URL, data, format='multipart')
+
+
+class UploadValidationTests(MedicalRecordTestBase):
+    def test_upload_pdf_returns_201(self):
+        res = self._upload(_pdf_file())
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(MedicalRecord.objects.count(), 1)
+        self.assertTrue(MedicalRecord.objects.get().file.name.endswith('.pdf'))
+
+    def test_upload_png_returns_201(self):
+        res = self._upload(_png_file())
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(MedicalRecord.objects.get().file.name.endswith('.png'))
+
+    def test_upload_jpeg_returns_201(self):
+        res = self._upload(_jpeg_file())
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(MedicalRecord.objects.get().file.name.endswith('.jpg'))
+
+    def test_upload_randomizes_filename(self):
+        res = self._upload(_pdf_file(name='very-identifiable-name.pdf'))
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        stored_name = MedicalRecord.objects.get().file.name
+        self.assertNotIn('very-identifiable-name', stored_name)
+
+    def test_upload_rejects_non_pdf_non_image_bytes(self):
+        bogus = SimpleUploadedFile('evil.html', b'<script>alert(1)</script>', content_type='text/html')
+        res = self._upload(bogus)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(MedicalRecord.objects.count(), 0)
+
+    def test_upload_rejects_oversized_file(self):
+        oversized = SimpleUploadedFile(
+            'huge.pdf', b'%PDF-1.4' + (b'0' * (15 * 1024 * 1024 + 1)), content_type='application/pdf',
+        )
+        res = self._upload(oversized)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(MedicalRecord.objects.count(), 0)
+
+    def test_upload_missing_file_returns_400(self):
+        res = self.client.post(
+            RECORDS_URL, {'title': 'No file', 'record_type': 'other'}, format='multipart',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_upload_missing_title_returns_400(self):
+        res = self.client.post(
+            RECORDS_URL, {'record_type': 'other', 'file': _pdf_file()}, format='multipart',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(MedicalRecord.objects.count(), 0)
+
+    def test_upload_invalid_record_type_returns_400(self):
+        res = self._upload(_pdf_file(), record_type='not-a-real-type')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_doctor_cannot_upload_record(self):
+        self.as_doctor()
+        res = self._upload(_pdf_file())
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_anonymous_cannot_upload_record(self):
+        self.as_anonymous()
+        res = self._upload(_pdf_file())
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class RecordListDetailTests(MedicalRecordTestBase):
+    def test_list_returns_only_own_records(self):
+        self._upload(_pdf_file())
+        other_token = _register_and_login(self.client, patient_payload(email='other@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+        self._upload(_png_file())
+
+        self.as_patient()
+        res = self.client.get(RECORDS_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+
+    def test_get_returns_signed_file_url(self):
+        create_res = self._upload(_pdf_file())
+        res = self.client.get(_detail_url(create_res.data['id']))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data['file'])
+
+    def test_get_other_patients_record_returns_404(self):
+        create_res = self._upload(_pdf_file())
+        other_token = _register_and_login(self.client, patient_payload(email='other2@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+        res = self.client.get(_detail_url(create_res.data['id']))
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_returns_204_and_removes_row(self):
+        create_res = self._upload(_pdf_file())
+        res = self.client.delete(_detail_url(create_res.data['id']))
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(MedicalRecord.objects.filter(pk=create_res.data['id']).exists())
+
+    def test_delete_other_patients_record_returns_404(self):
+        create_res = self._upload(_pdf_file())
+        other_token = _register_and_login(self.client, patient_payload(email='other3@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+        res = self.client.delete(_detail_url(create_res.data['id']))
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(MedicalRecord.objects.filter(pk=create_res.data['id']).exists())
