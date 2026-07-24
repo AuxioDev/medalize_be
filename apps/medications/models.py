@@ -22,6 +22,13 @@ class Medication(models.Model):
     notes = models.TextField(blank=True)
     source = models.CharField(max_length=12, choices=SOURCE_CHOICES, default=SOURCE_MANUAL)
     is_active = models.BooleanField(default=True)
+    # Set only when source == SOURCE_PRESCRIPTION, via PrescriptionApplyView.
+    # Added in a follow-up migration once apps.prescriptions exists, to avoid
+    # a circular app dependency at apps.medications' initial migration.
+    prescription_item = models.ForeignKey(
+        'prescriptions.PrescriptionItem', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='medications',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

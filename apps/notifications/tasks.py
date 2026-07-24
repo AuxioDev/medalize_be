@@ -510,6 +510,31 @@ def send_new_booking_pending(appointment_id):
 
 
 @shared_task
+def send_prescription_issued(prescription_id):
+    from apps.prescriptions.models import Prescription
+    from .models import Notification
+    try:
+        prescription = Prescription.objects.select_related('doctor', 'patient').get(pk=prescription_id)
+    except Prescription.DoesNotExist:
+        return
+
+    tpl = render_template(
+        'prescription_issued', recipient_language(prescription.patient),
+        doctor_name=_display_name(prescription.doctor),
+    )
+
+    Notification.objects.create(
+        user=prescription.patient,
+        type=Notification.TYPE_GENERAL,
+        title=tpl['title'],
+        message=tpl['body'],
+    )
+    _send_email(tpl['subject'], tpl['body'], prescription.patient)
+    _send_push(prescription.patient, tpl['title'], tpl['body'],
+               data={'type': 'prescription', 'prescription_id': str(prescription.id)})
+
+
+@shared_task
 def auto_complete_past_appointments():
     """Marks confirmed appointments whose end time has passed as completed."""
     from apps.appointments.models import Appointment

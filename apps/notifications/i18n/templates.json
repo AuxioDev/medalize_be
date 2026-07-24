@@ -550,5 +550,37 @@
       "subject": "密码重置验证码 — Medalize",
       "body": "您的密码重置验证码是：{code}\n\n该验证码将在 10 分钟后失效。如果这不是您本人发起的请求，可以忽略此邮件。"
     }
+  },
+  "prescription_issued": {
+    "en": {
+      "subject": "New Prescription — Medalize",
+      "title": "New Prescription",
+      "body": "Dr. {doctor_name} has issued a new prescription for you. Tap to view details."
+    },
+    "ru": {
+      "subject": "Новый рецепт — Medalize",
+      "title": "Новый рецепт",
+      "body": "Врач {doctor_name} выписал вам новый рецепт. Нажмите, чтобы посмотреть детали."
+    },
+    "az": {
+      "subject": "Yeni resept — Medalize",
+      "title": "Yeni resept",
+      "body": "Dr. {doctor_name} sizin üçün yeni resept yazdı. Ətraflı məlumat üçün toxunun."
+    },
+    "tr": {
+      "subject": "Yeni Reçete — Medalize",
+      "title": "Yeni Reçete",
+      "body": "Dr. {doctor_name} sizin için yeni bir reçete düzenledi. Ayrıntılar için dokunun."
+    },
+    "fr": {
+      "subject": "Nouvelle ordonnance — Medalize",
+      "title": "Nouvelle ordonnance",
+      "body": "Le Dr {doctor_name} a émis une nouvelle ordonnance pour vous. Appuyez pour voir les détails."
+    },
+    "zh": {
+      "subject": "新处方 — Medalize",
+      "title": "新处方",
+      "body": "{doctor_name} 医生为您开具了新处方。点击查看详情。"
+    }
   }
 }
