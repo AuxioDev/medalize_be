@@ -535,6 +535,36 @@ def send_prescription_issued(prescription_id):
 
 
 @shared_task
+def send_new_message(message_id):
+    from apps.messaging.models import Message
+    from .models import Notification
+    try:
+        message = Message.objects.select_related(
+            'sender', 'thread__patient', 'thread__doctor'
+        ).get(pk=message_id)
+    except Message.DoesNotExist:
+        return
+
+    thread = message.thread
+    recipient = thread.doctor if message.sender_id == thread.patient_id else thread.patient
+
+    tpl = render_template(
+        'new_message', recipient_language(recipient),
+        sender_name=_display_name(message.sender),
+    )
+
+    Notification.objects.create(
+        user=recipient,
+        type=Notification.TYPE_GENERAL,
+        title=tpl['title'],
+        message=tpl['body'],
+    )
+    _send_email(tpl['subject'], tpl['body'], recipient)
+    _send_push(recipient, tpl['title'], tpl['body'],
+               data={'type': 'message', 'thread_id': str(thread.id)})
+
+
+@shared_task
 def auto_complete_past_appointments():
     """Marks confirmed appointments whose end time has passed as completed."""
     from apps.appointments.models import Appointment

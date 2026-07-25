@@ -582,5 +582,37 @@
       "title": "新处方",
       "body": "{doctor_name} 医生为您开具了新处方。点击查看详情。"
     }
+  },
+  "new_message": {
+    "en": {
+      "subject": "New Message — Medalize",
+      "title": "New Message",
+      "body": "You have a new message from {sender_name}. Tap to view."
+    },
+    "ru": {
+      "subject": "Новое сообщение — Medalize",
+      "title": "Новое сообщение",
+      "body": "У вас новое сообщение от {sender_name}. Нажмите, чтобы посмотреть."
+    },
+    "az": {
+      "subject": "Yeni mesaj — Medalize",
+      "title": "Yeni mesaj",
+      "body": "{sender_name} tərəfindən yeni mesajınız var. Baxmaq üçün toxunun."
+    },
+    "tr": {
+      "subject": "Yeni Mesaj — Medalize",
+      "title": "Yeni Mesaj",
+      "body": "{sender_name} adlı kullanıcıdan yeni bir mesajınız var. Görüntülemek için dokunun."
+    },
+    "fr": {
+      "subject": "Nouveau message — Medalize",
+      "title": "Nouveau message",
+      "body": "Vous avez un nouveau message de {sender_name}. Appuyez pour le consulter."
+    },
+    "zh": {
+      "subject": "新消息 — Medalize",
+      "title": "新消息",
+      "body": "您收到来自 {sender_name} 的新消息。点击查看。"
+    }
   }
 }
