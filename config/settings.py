@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'apps.prescriptions',
     'apps.records',
     'apps.messaging',
+    'apps.payments',
 ]
 
 MIDDLEWARE = [
@@ -341,6 +342,22 @@ ASSISTANT_ENCRYPTION_KEY = env('ASSISTANT_ENCRYPTION_KEY', default='')
 # Set FIREBASE_CREDENTIALS_JSON to the path of your serviceAccountKey.json,
 # or leave empty to disable push notifications (emails + in-app still work).
 FIREBASE_CREDENTIALS_JSON = env('FIREBASE_CREDENTIALS_JSON', default='')
+
+# ── In-app payments (Payriff — Azerbaijani card acquiring) ───────────────────
+# Both values must be set for payments to be enabled; leave either blank to
+# disable it (POST/GET /api/appointments/<id>/payment/ answer 503). Payment is
+# never a required step of booking — the rest of the flow is unaffected
+# either way. See apps/payments/providers/payriff.py::PayriffProvider for the
+# (partially unverified — flagged there) API details this integrates against.
+PAYRIFF_MERCHANT_ID = env('PAYRIFF_MERCHANT_ID', default='')
+PAYRIFF_SECRET_KEY = env('PAYRIFF_SECRET_KEY', default='')
+
+# Absolute base URL of this backend (no trailing slash needed), used to build
+# the approveURL/cancelURL/declineURL Payriff redirects the user's browser to
+# after checkout (apps/payments/service.py::_return_url). Not used for
+# anything else — the mobile app talks to the API via its own configured
+# base URL, unrelated to this setting.
+BACKEND_BASE_URL = env('BACKEND_BASE_URL', default='http://localhost:8000')
 
 if FIREBASE_CREDENTIALS_JSON:
     import firebase_admin

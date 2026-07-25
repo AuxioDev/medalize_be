@@ -614,5 +614,37 @@
       "title": "新消息",
       "body": "您收到来自 {sender_name} 的新消息。点击查看。"
     }
+  },
+  "payment_received": {
+    "en": {
+      "subject": "Payment Received — Medalize",
+      "title": "Payment Received",
+      "body": "Your payment of {amount} {currency} for the appointment with Dr. {doctor_name} was successful."
+    },
+    "ru": {
+      "subject": "Оплата получена — Medalize",
+      "title": "Оплата получена",
+      "body": "Ваш платёж на сумму {amount} {currency} за приём у врача {doctor_name} прошёл успешно."
+    },
+    "az": {
+      "subject": "Ödəniş qəbul edildi — Medalize",
+      "title": "Ödəniş qəbul edildi",
+      "body": "Dr. {doctor_name} ilə görüş üçün {amount} {currency} məbləğində ödənişiniz uğurla həyata keçirildi."
+    },
+    "tr": {
+      "subject": "Ödeme Alındı — Medalize",
+      "title": "Ödeme Alındı",
+      "body": "Dr. {doctor_name} ile randevunuz için {amount} {currency} tutarındaki ödemeniz başarıyla gerçekleşti."
+    },
+    "fr": {
+      "subject": "Paiement reçu — Medalize",
+      "title": "Paiement reçu",
+      "body": "Votre paiement de {amount} {currency} pour le rendez-vous avec le Dr {doctor_name} a été effectué avec succès."
+    },
+    "zh": {
+      "subject": "已收到付款 — Medalize",
+      "title": "已收到付款",
+      "body": "您为与 {doctor_name} 医生的预约支付的 {amount} {currency} 已成功完成。"
+    }
   }
 }

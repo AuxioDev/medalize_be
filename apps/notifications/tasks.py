@@ -535,6 +535,32 @@ def send_prescription_issued(prescription_id):
 
 
 @shared_task
+def send_payment_received(payment_id):
+    from apps.payments.models import Payment
+    from .models import Notification
+    try:
+        payment = Payment.objects.select_related('doctor', 'patient').get(pk=payment_id)
+    except Payment.DoesNotExist:
+        return
+
+    tpl = render_template(
+        'payment_received', recipient_language(payment.patient),
+        doctor_name=_display_name(payment.doctor),
+        amount=payment.amount, currency=payment.currency,
+    )
+
+    Notification.objects.create(
+        user=payment.patient,
+        type=Notification.TYPE_GENERAL,
+        title=tpl['title'],
+        message=tpl['body'],
+    )
+    _send_email(tpl['subject'], tpl['body'], payment.patient)
+    _send_push(payment.patient, tpl['title'], tpl['body'],
+               data={'type': 'payment', 'payment_id': str(payment.id)})
+
+
+@shared_task
 def send_new_message(message_id):
     from apps.messaging.models import Message
     from .models import Notification
