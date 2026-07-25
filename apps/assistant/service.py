@@ -17,6 +17,7 @@ import json
 
 from django.conf import settings
 from django.db.models import Avg, Count, F
+from django.utils import timezone
 
 from apps.notifications.i18n import recipient_language
 from apps.users.i18n import specialization_label
@@ -69,6 +70,68 @@ _SEARCH_DOCTORS_TOOL = {
     },
 }
 
+# Forced tool-call (see generate_summary()) that turns the free-form chat
+# transcript into a guaranteed-structured, patient-shareable report instead of
+# parsing free text.
+_SUMMARY_TOOL = {
+    'name': 'record_summary',
+    'description': 'Record a structured, patient-shareable summary of this conversation.',
+    'input_schema': {
+        'type': 'object',
+        'properties': {
+            'summary_text': {
+                'type': 'string',
+                'description': 'A short, patient-friendly paragraph summarizing the discussion so far.',
+            },
+            'possible_conditions': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'name': {'type': 'string'},
+                        'likelihood': {'type': 'string', 'enum': ['low', 'medium', 'high']},
+                        'note': {'type': 'string'},
+                    },
+                    'required': ['name', 'likelihood'],
+                },
+            },
+            'urgency': {
+                'type': 'string',
+                'enum': ['routine', 'soon', 'urgent', 'emergency'],
+                'description': (
+                    'routine = no rush; soon = see a doctor within days; '
+                    'urgent = within 24h; emergency = seek emergency care now.'
+                ),
+            },
+            'recommended_specialization': {
+                'type': 'string',
+                'enum': _SPECIALIZATION_CODES,
+            },
+        },
+        'required': ['summary_text', 'possible_conditions', 'urgency', 'recommended_specialization'],
+    },
+}
+
+_SUMMARY_SYSTEM_PROMPT_LINES = [
+    'You are the Medalize AI symptom assistant. Analyze the ENTIRE conversation '
+    'above between the patient and the assistant, then call the record_summary '
+    'tool exactly once with a structured, patient-shareable summary of it.',
+    'Strict rules:',
+    '- NEVER give a diagnosis. possible_conditions are possible, unconfirmed '
+    'directions worth discussing with a real doctor — not a list of diagnoses.',
+    '- NEVER name specific medication dosages.',
+    '- Set urgency honestly based on the symptoms actually discussed: '
+    'routine = no rush; soon = see a doctor within days; urgent = within 24h; '
+    'emergency = seek emergency care now.',
+    '- summary_text must be a short, patient-friendly paragraph, not clinical jargon.',
+]
+
+
+def _build_summary_system_prompt(lang):
+    parts = list(_SUMMARY_SYSTEM_PROMPT_LINES)
+    parts.append(f"- Respond in the patient's language (language code: {lang}).")
+    return '\n'.join(parts)
+
 
 def _client():
     import anthropic
@@ -94,16 +157,25 @@ def classify_is_medical(recent_messages):
     return not text.startswith('NOT')
 
 
-def call_assistant(system_prompt, messages, tools):
+def call_assistant(system_prompt, messages, tools, tool_choice=None):
     """Returns the raw Anthropic API response object (may contain tool_use
-    blocks). Its own function so tests can mock it without hitting the network."""
-    return _client().messages.create(
+    blocks). Its own function so tests can mock it without hitting the network.
+
+    ``tool_choice`` is optional and, when omitted, is not forwarded to
+    ``messages.create`` at all — existing call sites (handle_user_message)
+    keep relying on the model's default (auto) tool choice unchanged. Passing
+    e.g. {'type': 'tool', 'name': 'record_summary'} forces a specific tool
+    call, guaranteeing a structured response instead of free text."""
+    kwargs = dict(
         model=_CHAT_MODEL,
         max_tokens=2048,
         system=system_prompt,
         messages=messages,
         tools=tools,
     )
+    if tool_choice is not None:
+        kwargs['tool_choice'] = tool_choice
+    return _client().messages.create(**kwargs)
 
 
 def _age_from_dob(date_of_birth):
@@ -274,3 +346,25 @@ def handle_user_message(conversation, patient, text):
     )
     _touch_conversation(conversation)
     return reply
+
+
+def generate_summary(conversation, patient):
+    """Analyzes the FULL conversation history (unlike handle_user_message,
+    not capped to _RECENT_MESSAGES_LIMIT — a summary needs the whole thread)
+    and forces a single record_summary tool call to get a guaranteed
+    structured report. Persists it on the conversation and returns it."""
+    lang = recipient_language(patient)
+    all_messages = list(conversation.messages.order_by('created_at'))
+    api_messages = [{'role': m.role, 'content': m.content} for m in all_messages]
+
+    system_prompt = _build_summary_system_prompt(lang)
+    response = call_assistant(
+        system_prompt, api_messages, [_SUMMARY_TOOL],
+        tool_choice={'type': 'tool', 'name': 'record_summary'},
+    )
+    tool_use = next(block for block in response.content if block.type == 'tool_use')
+
+    conversation.summary = tool_use.input
+    conversation.summary_generated_at = timezone.now()
+    conversation.save(update_fields=['summary', 'summary_generated_at'])
+    return conversation

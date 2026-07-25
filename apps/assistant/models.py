@@ -15,6 +15,12 @@ class Conversation(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Structured, patient-shareable report generated on demand by
+    # generate_summary() — see apps/assistant/service.py. Raw dict shaped by
+    # the record_summary tool schema (_SUMMARY_TOOL), not a fixed set of
+    # columns, same JSONField approach as Message.suggested_doctors.
+    summary = models.JSONField(null=True, blank=True)
+    summary_generated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-updated_at']

@@ -17,7 +17,7 @@ from .serializers import (
     ConversationListSerializer,
     MessageSerializer,
 )
-from .service import handle_user_message
+from .service import generate_summary, handle_user_message
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,30 @@ class ConversationMessageView(AssistantBaseView):
             return _unavailable_response(request.user)
 
         return Response(MessageSerializer(reply).data, status=status.HTTP_201_CREATED)
+
+
+class ConversationSummaryView(AssistantBaseView):
+    def post(self, request, pk):
+        if not self._feature_enabled:
+            return _unavailable_response(request.user)
+        conversation = self._get_own_conversation(request, pk)
+
+        if not conversation.messages.filter(role=Message.ROLE_ASSISTANT).exists():
+            return Response(
+                {'code': 'validation_error',
+                 'detail': 'Not enough conversation yet to summarize.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            conversation = generate_summary(conversation, request.user)
+        except Exception:
+            logger.exception(
+                'Summary generation failed for conversation %s', conversation.pk
+            )
+            return _unavailable_response(request.user)
+
+        return Response(ConversationDetailSerializer(conversation).data)
 
 
 class MessageFlagView(AssistantBaseView):
