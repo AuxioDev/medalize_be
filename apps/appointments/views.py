@@ -358,7 +358,7 @@ class PatientAppointmentListCreateView(APIView):
         qs = (
             Appointment.objects
             .filter(patient=request.user)
-            .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+            .select_related('doctor', 'doctor__doctor_profile', 'patient', 'dependent', 'workplace')
             .order_by('-starts_at')
         )
         status_filter = request.query_params.get('status', '').strip()
@@ -418,7 +418,7 @@ class PatientAppointmentListCreateView(APIView):
         return Response(
             AppointmentSerializer(
                 Appointment.objects.select_related(
-                    'doctor', 'doctor__doctor_profile', 'patient', 'workplace'
+                    'doctor', 'doctor__doctor_profile', 'patient', 'dependent', 'workplace'
                 ).get(pk=appointment.pk),
                 context={'request': request},
             ).data,
@@ -433,7 +433,7 @@ class PatientAppointmentDetailView(APIView):
         try:
             return (
                 Appointment.objects
-                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'dependent', 'workplace')
                 .get(pk=pk, patient=patient)
             )
         except Appointment.DoesNotExist:
@@ -506,7 +506,7 @@ class PatientAppointmentRescheduleView(APIView):
         try:
             appointment = (
                 Appointment.objects
-                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'dependent', 'workplace')
                 .get(pk=pk, patient=request.user)
             )
         except Appointment.DoesNotExist:
@@ -629,7 +629,7 @@ class DoctorAppointmentListView(APIView):
         qs = (
             Appointment.objects
             .filter(doctor=request.user)
-            .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+            .select_related('doctor', 'doctor__doctor_profile', 'patient', 'dependent', 'workplace')
         )
         status_filter = request.query_params.get('status', '').strip()
         date_filter = request.query_params.get('date', '').strip()
@@ -661,7 +661,7 @@ class DoctorAppointmentDetailView(APIView):
         try:
             appointment = (
                 Appointment.objects
-                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'dependent', 'workplace')
                 .get(pk=pk, doctor=request.user)
             )
         except Appointment.DoesNotExist:
@@ -676,7 +676,7 @@ class DoctorAppointmentStatusView(APIView):
         try:
             appointment = (
                 Appointment.objects
-                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'dependent', 'workplace')
                 .get(pk=pk, doctor=request.user)
             )
         except Appointment.DoesNotExist:
@@ -762,7 +762,7 @@ class DoctorAppointmentNotesView(APIView):
         try:
             appointment = (
                 Appointment.objects
-                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'workplace')
+                .select_related('doctor', 'doctor__doctor_profile', 'patient', 'dependent', 'workplace')
                 .get(pk=pk, doctor=request.user)
             )
         except Appointment.DoesNotExist:

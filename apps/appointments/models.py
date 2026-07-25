@@ -53,6 +53,19 @@ class Appointment(models.Model):
         on_delete=models.CASCADE,
         related_name='patient_appointments',
     )
+    # Optional: which of the account owner's managed family members this
+    # visit is actually for. `patient` above is unchanged and remains the
+    # account owner (contact/payer/notification target) in every case —
+    # `dependent`, when set, is the real clinical subject of the visit. Added
+    # in a follow-up migration once apps.family exists, to avoid a circular
+    # app dependency at apps.appointments' initial migration (same reasoning
+    # as apps.medications.Medication.prescription_item).
+    dependent = models.ForeignKey(
+        'family.Dependent',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='appointments',
+    )
     workplace = models.ForeignKey(
         'doctors.Workplace',
         on_delete=models.PROTECT,

@@ -2,6 +2,9 @@ import re
 
 from rest_framework import serializers
 
+from apps.family.serializers import DependentBriefSerializer
+from apps.family.services import resolve_dependent
+
 from .models import DoseLog, Medication, MedicationSchedule
 
 _TIME_RE = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
@@ -39,12 +42,13 @@ class MedicationScheduleSerializer(serializers.ModelSerializer):
 
 class MedicationSerializer(serializers.ModelSerializer):
     schedules = MedicationScheduleSerializer(many=True, read_only=True)
+    dependent = DependentBriefSerializer(read_only=True)
 
     class Meta:
         model = Medication
         fields = [
             'id', 'name', 'dosage', 'form', 'notes', 'source', 'is_active',
-            'schedules', 'created_at', 'updated_at',
+            'dependent', 'schedules', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'source', 'is_active', 'created_at', 'updated_at']
 
@@ -53,18 +57,28 @@ class MedicationCreateSerializer(serializers.ModelSerializer):
     """Used for both POST (create) and PATCH (update) — a writable-nested
     ``schedules`` list. On update, providing ``schedules`` replaces the full
     set for that medication (delete + recreate), matching how the mobile
-    add/edit screen re-submits the whole schedule builder at once."""
+    add/edit screen re-submits the whole schedule builder at once.
+
+    ``dependent_id`` is optional and write-only: books this medication for
+    one of the patient's managed family members instead of the patient
+    themself. Resolved to the actual Dependent instance (or None) by
+    validate_dependent_id."""
 
     schedules = MedicationScheduleSerializer(many=True, required=False)
+    dependent_id = serializers.UUIDField(required=False, allow_null=True)
 
     class Meta:
         model = Medication
-        fields = ['name', 'dosage', 'form', 'notes', 'schedules']
+        fields = ['name', 'dosage', 'form', 'notes', 'schedules', 'dependent_id']
+
+    def validate_dependent_id(self, value):
+        return resolve_dependent(self.context['request'].user, value)
 
     def create(self, validated_data):
         schedules_data = validated_data.pop('schedules', [])
+        dependent = validated_data.pop('dependent_id', None)
         medication = Medication.objects.create(
-            patient=self.context['request'].user, **validated_data
+            patient=self.context['request'].user, dependent=dependent, **validated_data
         )
         for schedule_data in schedules_data:
             MedicationSchedule.objects.create(medication=medication, **schedule_data)
@@ -72,6 +86,8 @@ class MedicationCreateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         schedules_data = validated_data.pop('schedules', None)
+        if 'dependent_id' in validated_data:
+            instance.dependent = validated_data.pop('dependent_id')
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

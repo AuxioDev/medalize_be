@@ -57,7 +57,11 @@ class MedicalRecordListCreateView(APIView):
     parser_classes = [MultiPartParser]
 
     def get(self, request):
-        records = MedicalRecord.objects.filter(patient=request.user).order_by('-record_date', '-created_at')
+        records = (
+            MedicalRecord.objects.filter(patient=request.user)
+            .select_related('dependent')
+            .order_by('-record_date', '-created_at')
+        )
         return Response(
             MedicalRecordSerializer(records, many=True, context={'request': request}).data
         )
@@ -68,11 +72,13 @@ class MedicalRecordListCreateView(APIView):
             raise ValidationError({'file': 'No file provided.'})
         file = _validate_and_prepare_file(file)
 
-        serializer = MedicalRecordCreateSerializer(data=request.data)
+        serializer = MedicalRecordCreateSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
 
+        validated_data = dict(serializer.validated_data)
+        dependent = validated_data.pop('dependent_id', None)
         record = MedicalRecord.objects.create(
-            patient=request.user, file=file, **serializer.validated_data
+            patient=request.user, file=file, dependent=dependent, **validated_data
         )
         return Response(
             MedicalRecordSerializer(record, context={'request': request}).data,
@@ -85,7 +91,7 @@ class MedicalRecordDetailView(APIView):
 
     def _get(self, pk, patient):
         try:
-            return MedicalRecord.objects.get(pk=pk, patient=patient)
+            return MedicalRecord.objects.select_related('dependent').get(pk=pk, patient=patient)
         except MedicalRecord.DoesNotExist:
             raise NotFound()
 

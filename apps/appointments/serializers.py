@@ -8,6 +8,8 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.doctors.models import BlockedPeriod, WorkingHours, Workplace
+from apps.family.serializers import DependentBriefSerializer
+from apps.family.services import resolve_dependent
 from apps.users.i18n import specialization_label, viewer_language
 from .models import Appointment, CANCELLATION_WINDOW_HOURS, REVIEW_EDIT_WINDOW_DAYS, Review
 
@@ -50,8 +52,18 @@ class WorkplaceBriefSerializer(serializers.Serializer):
 
 
 class AppointmentSerializer(serializers.ModelSerializer):
+    """`patient` is always the account owner — the authorized `User` who
+    booked, is billed, and receives notifications for this appointment; that
+    never changes. `dependent`, when not null, is the actual clinical
+    subject of the visit — a managed family member, not the account owner.
+    Both are exposed explicitly and unambiguously so a doctor-facing client
+    never renders `patient`'s name as "who this visit is for" when a
+    `dependent` is set — that would be a patient-safety issue, not just a
+    cosmetic one."""
+
     doctor = DoctorBriefSerializer(read_only=True)
     patient = PatientBriefSerializer(read_only=True)
+    dependent = DependentBriefSerializer(read_only=True)
     workplace = WorkplaceBriefSerializer(read_only=True)
     # Server-computed so the client doesn't hardcode the cancellation rule.
     can_cancel = serializers.SerializerMethodField()
@@ -63,7 +75,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Appointment
         fields = [
-            'id', 'doctor', 'patient', 'workplace',
+            'id', 'doctor', 'patient', 'dependent', 'workplace',
             'starts_at', 'ends_at', 'status', 'reason', 'notes', 'created_at',
             'can_cancel', 'can_reschedule', 'has_review', 'review', 'can_edit_review',
         ]
@@ -118,11 +130,18 @@ class BookingSerializer(serializers.Serializer):
     workplace_id = serializers.UUIDField()
     starts_at = serializers.DateTimeField()
     reason = serializers.CharField(allow_blank=True, default='')
+    # Optional: books this appointment for one of the patient's managed
+    # family members instead of the patient themself. Resolved to the actual
+    # Dependent instance by validate_dependent_id, or None if omitted.
+    dependent_id = serializers.UUIDField(required=False, allow_null=True)
 
     def validate_starts_at(self, value):
         if value <= timezone.now():
             raise serializers.ValidationError('Appointment must be in the future.')
         return value
+
+    def validate_dependent_id(self, value):
+        return resolve_dependent(self.context['request'].user, value)
 
     def validate(self, attrs):
         try:
@@ -199,6 +218,7 @@ class BookingSerializer(serializers.Serializer):
         return Appointment.objects.create(
             doctor=validated_data['_doctor'],
             patient=self.context['request'].user,
+            dependent=validated_data.get('dependent_id'),
             workplace=validated_data['_workplace'],
             starts_at=validated_data['starts_at'],
             ends_at=validated_data['_ends_at'],

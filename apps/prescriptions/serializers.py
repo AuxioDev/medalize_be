@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.appointments.models import Appointment
+from apps.family.serializers import DependentBriefSerializer
 
 from .models import Prescription, PrescriptionItem
 
@@ -16,12 +17,13 @@ class PrescriptionSerializer(serializers.ModelSerializer):
     items = PrescriptionItemSerializer(many=True, read_only=True)
     doctor_name = serializers.SerializerMethodField()
     patient_name = serializers.SerializerMethodField()
+    dependent = DependentBriefSerializer(read_only=True)
 
     class Meta:
         model = Prescription
         fields = [
             'id', 'appointment', 'doctor', 'patient', 'doctor_name', 'patient_name',
-            'notes', 'items', 'issued_at',
+            'dependent', 'notes', 'items', 'issued_at',
         ]
         read_only_fields = fields
 
@@ -67,6 +69,7 @@ class PrescriptionCreateSerializer(serializers.Serializer):
             appointment=appointment,
             doctor=appointment.doctor,
             patient=appointment.patient,
+            dependent=appointment.dependent,
             notes=validated_data.get('notes', ''),
         )
         PrescriptionItem.objects.bulk_create([

@@ -18,6 +18,7 @@ class MedicationListCreateView(APIView):
     def get(self, request):
         medications = (
             Medication.objects.filter(patient=request.user)
+            .select_related('dependent')
             .prefetch_related('schedules')
             .order_by('-is_active', '-created_at')
         )
@@ -35,7 +36,11 @@ class MedicationDetailView(APIView):
 
     def _get(self, pk, patient):
         try:
-            return Medication.objects.prefetch_related('schedules').get(pk=pk, patient=patient)
+            return (
+                Medication.objects.select_related('dependent')
+                .prefetch_related('schedules')
+                .get(pk=pk, patient=patient)
+            )
         except Medication.DoesNotExist:
             raise NotFound()
 

@@ -1,3 +1,5 @@
+import uuid
+
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -5,6 +7,7 @@ from rest_framework.test import APITestCase
 from apps.appointments.tests.test_appointments import (
     _register_and_login, doctor_payload, patient_payload,
 )
+from apps.family.models import Dependent
 from apps.medications.models import DoseLog, Medication, MedicationSchedule
 
 MEDICATIONS_URL = '/api/medications/'
@@ -93,6 +96,78 @@ class MedicationCreateTests(MedicationTestBase):
         self.as_anonymous()
         res = self.client.post(MEDICATIONS_URL, {'name': 'X'}, format='json')
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class DependentMedicationTests(MedicationTestBase):
+    """dependent_id validation on MedicationCreateSerializer — same shared
+    resolve_dependent() rule as booking/records."""
+
+    def _patient(self):
+        from django.contrib.auth import get_user_model
+        return get_user_model().objects.get(email='patient@test.com')
+
+    def setUp(self):
+        super().setUp()
+        self.dependent = Dependent.objects.create(
+            managed_by=self._patient(), first_name='Kid', last_name='Doe', relationship='child',
+        )
+
+    def test_create_with_own_active_dependent_returns_201(self):
+        res = self.client.post(
+            MEDICATIONS_URL,
+            {'name': 'Amoxicillin', 'dependent_id': str(self.dependent.id)},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['dependent']['id'], str(self.dependent.id))
+        medication = Medication.objects.get(pk=res.data['id'])
+        self.assertEqual(medication.dependent_id, self.dependent.id)
+        self.assertEqual(medication.patient_id, self._patient().id)
+
+    def test_create_without_dependent_id_leaves_dependent_null(self):
+        res = self.client.post(MEDICATIONS_URL, {'name': 'Ibuprofen'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(res.data['dependent'])
+
+    def test_create_with_someone_elses_dependent_returns_400(self):
+        other_token = _register_and_login(self.client, patient_payload(email='dep-other@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+        res = self.client.post(
+            MEDICATIONS_URL,
+            {'name': 'Amoxicillin', 'dependent_id': str(self.dependent.id)},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
+
+    def test_create_with_nonexistent_dependent_returns_400(self):
+        res = self.client.post(
+            MEDICATIONS_URL,
+            {'name': 'Amoxicillin', 'dependent_id': str(uuid.uuid4())},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
+
+    def test_create_with_inactive_dependent_returns_400(self):
+        self.dependent.is_active = False
+        self.dependent.save(update_fields=['is_active'])
+        res = self.client.post(
+            MEDICATIONS_URL,
+            {'name': 'Amoxicillin', 'dependent_id': str(self.dependent.id)},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
+
+    def test_patch_can_set_dependent(self):
+        medication = Medication.objects.create(patient=self._patient(), name='Metformin')
+        res = self.client.patch(
+            _detail_url(medication.id), {'dependent_id': str(self.dependent.id)}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        medication.refresh_from_db()
+        self.assertEqual(medication.dependent_id, self.dependent.id)
 
 
 class MedicationListDetailTests(MedicationTestBase):

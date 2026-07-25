@@ -14,6 +14,18 @@ class Medication(models.Model):
     patient = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='medications',
     )
+    # Optional: which of the account owner's managed family members this
+    # medication is actually for. `patient` above is unchanged. Added in a
+    # follow-up migration once apps.family exists (see
+    # apps.appointments.models.Appointment.dependent for the full rationale).
+    # related_name is 'dependent_medications', not 'medications' — Dependent
+    # already has its own plain-text `medications` field (mirroring
+    # PatientProfile), and Django rejects a FK reverse accessor that shadows
+    # an existing field name on the target model.
+    dependent = models.ForeignKey(
+        'family.Dependent', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='dependent_medications',
+    )
     name = models.CharField(max_length=200)
     dosage = models.CharField(max_length=100, blank=True)
     # pill/capsule/liquid/injection/other — validated against a client-side

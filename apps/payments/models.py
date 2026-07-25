@@ -38,6 +38,16 @@ class Payment(models.Model):
     doctor = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payments_received',
     )
+    # Denormalized from appointment.dependent at creation time, same as
+    # doctor/patient above — no new UI/input here, get_or_create_payment()
+    # just copies it from the appointment on first creation only (it never
+    # changes after that, like the rest of this row's identity). Added in a
+    # follow-up migration once apps.family exists (see
+    # apps.appointments.models.Appointment.dependent for the full rationale).
+    dependent = models.ForeignKey(
+        'family.Dependent', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='payments',
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='AZN')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)

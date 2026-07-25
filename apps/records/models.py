@@ -36,6 +36,14 @@ class MedicalRecord(models.Model):
     patient = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='medical_records',
     )
+    # Optional: which of the account owner's managed family members this
+    # document is actually for. `patient` above is unchanged. Added in a
+    # follow-up migration once apps.family exists (see
+    # apps.appointments.models.Appointment.dependent for the full rationale).
+    dependent = models.ForeignKey(
+        'family.Dependent', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='medical_records',
+    )
     record_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_OTHER)
     title = models.CharField(max_length=200)
     file = models.FileField(upload_to='records/', storage=record_storage)

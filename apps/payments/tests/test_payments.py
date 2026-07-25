@@ -10,6 +10,7 @@ from apps.appointments.tests.test_appointments import (
     doctor_payload,
     patient_payload,
 )
+from apps.family.models import Dependent
 from apps.notifications.models import Notification
 from apps.payments.models import Payment
 from apps.payments.providers.base import ProviderOrder
@@ -129,6 +130,58 @@ class CreatePaymentTests(PaymentTestBase):
         self.client.force_authenticate(None)
         res = self.client.post(payment_url(self.appointment.id))
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PaymentDependentInheritanceTests(PaymentTestBase):
+    """Payment.dependent is denormalized from appointment.dependent only at
+    first creation — same as doctor/patient — with no separate input, and it
+    must not be reassigned on later retries/reuses of the same row."""
+
+    def setUp(self):
+        super().setUp()
+        self.dependent = Dependent.objects.create(
+            managed_by=self.patient, first_name='Kid', last_name='Doe', relationship='child',
+        )
+        self.appointment.dependent = self.dependent
+        self.appointment.save(update_fields=['dependent'])
+
+    def test_payment_inherits_dependent_from_appointment_on_creation(self):
+        with patch(CREATE_PATCH, return_value=fake_order('order-dep-1')):
+            res = self.client.post(payment_url(self.appointment.id))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['dependent']['id'], str(self.dependent.id))
+        payment = Payment.objects.get(appointment=self.appointment)
+        self.assertEqual(payment.dependent_id, self.dependent.id)
+        # patient stays the account owner, unaffected by dependent.
+        self.assertEqual(payment.patient, self.patient)
+
+    def test_payment_dependent_is_null_when_appointment_has_none(self):
+        self.appointment.dependent = None
+        self.appointment.save(update_fields=['dependent'])
+        with patch(CREATE_PATCH, return_value=fake_order('order-dep-2')):
+            res = self.client.post(payment_url(self.appointment.id))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsNone(res.data['dependent'])
+
+    def test_dependent_is_not_reassigned_when_retrying_a_failed_payment(self):
+        with patch(CREATE_PATCH, return_value=fake_order('order-dep-3')):
+            self.client.post(payment_url(self.appointment.id))
+        payment = Payment.objects.get(appointment=self.appointment)
+        self.assertEqual(payment.dependent_id, self.dependent.id)
+
+        payment.status = Payment.STATUS_FAILED
+        payment.save(update_fields=['status'])
+        # Even if the appointment's dependent were to change in between (it
+        # never does in practice — dependent_id isn't editable post-booking —
+        # but this confirms the retry path truly never touches it).
+        self.appointment.dependent = None
+        self.appointment.save(update_fields=['dependent'])
+
+        with patch(CREATE_PATCH, return_value=fake_order('order-dep-4')):
+            res = self.client.post(payment_url(self.appointment.id))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        payment.refresh_from_db()
+        self.assertEqual(payment.dependent_id, self.dependent.id)
 
 
 class FeatureDisabledTests(PaymentTestBase):

@@ -33,7 +33,7 @@ class AppointmentPaymentView(APIView):
 
     def get(self, request, pk):
         try:
-            appointment = Appointment.objects.select_related('doctor', 'patient').get(pk=pk)
+            appointment = Appointment.objects.select_related('doctor', 'patient', 'dependent').get(pk=pk)
         except Appointment.DoesNotExist:
             raise NotFound()
         if request.user not in (appointment.doctor, appointment.patient):

@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'apps.users',
     'apps.core',
+    'apps.family',
     'apps.doctors',
     'apps.appointments',
     'apps.notifications',

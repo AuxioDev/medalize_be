@@ -22,6 +22,15 @@ class Prescription(models.Model):
     patient = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='prescriptions_received',
     )
+    # Denormalized from appointment.dependent at creation time, same as
+    # doctor/patient above — no new UI/input here, PrescriptionCreateSerializer.
+    # create() just copies it from the appointment. Added in a follow-up
+    # migration once apps.family exists (see
+    # apps.appointments.models.Appointment.dependent for the full rationale).
+    dependent = models.ForeignKey(
+        'family.Dependent', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='prescriptions',
+    )
     notes = models.TextField(blank=True)
     issued_at = models.DateTimeField(auto_now_add=True)
 

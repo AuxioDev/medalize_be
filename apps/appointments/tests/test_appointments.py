@@ -227,6 +227,76 @@ class BookingTests(AppointmentTestBase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class DependentBookingTests(AppointmentTestBase):
+    """dependent_id validation on BookingSerializer — accepts the patient's
+    own active dependent, rejects anything else. See
+    apps.family.services.resolve_dependent, shared by medications/records."""
+
+    def _booking_payload(self, **kwargs):
+        data = {
+            'doctor_id': str(self.doctor.pk),
+            'workplace_id': str(self.workplace.pk),
+            'starts_at': self._future_dt(11).isoformat(),
+            'reason': 'Checkup',
+        }
+        data.update(kwargs)
+        return data
+
+    def setUp(self):
+        super().setUp()
+        from apps.family.models import Dependent
+        self.dependent = Dependent.objects.create(
+            managed_by=self.patient, first_name='Kid', last_name='Doe', relationship='child',
+        )
+
+    def test_booking_with_own_active_dependent_returns_201(self):
+        self.as_patient()
+        res = self.client.post(
+            APPOINTMENTS_URL, self._booking_payload(dependent_id=str(self.dependent.id)), format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['dependent']['id'], str(self.dependent.id))
+        self.assertEqual(res.data['dependent']['first_name'], 'Kid')
+        # patient stays the account owner — untouched by dependent_id.
+        self.assertEqual(res.data['patient']['id'], str(self.patient.id))
+        appointment = Appointment.objects.get(pk=res.data['id'])
+        self.assertEqual(appointment.dependent_id, self.dependent.id)
+        self.assertEqual(appointment.patient_id, self.patient.id)
+
+    def test_booking_without_dependent_id_leaves_dependent_null(self):
+        self.as_patient()
+        res = self.client.post(APPOINTMENTS_URL, self._booking_payload(), format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(res.data['dependent'])
+
+    def test_booking_with_someone_elses_dependent_returns_400(self):
+        other_token = _register_and_login(self.client, patient_payload(email='dep-other@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+        res = self.client.post(
+            APPOINTMENTS_URL, self._booking_payload(dependent_id=str(self.dependent.id)), format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
+
+    def test_booking_with_nonexistent_dependent_returns_400(self):
+        self.as_patient()
+        res = self.client.post(
+            APPOINTMENTS_URL, self._booking_payload(dependent_id=str(uuid.uuid4())), format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
+
+    def test_booking_with_inactive_dependent_returns_400(self):
+        self.dependent.is_active = False
+        self.dependent.save(update_fields=['is_active'])
+        self.as_patient()
+        res = self.client.post(
+            APPOINTMENTS_URL, self._booking_payload(dependent_id=str(self.dependent.id)), format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
+
+
 class ConcurrencySafetyTests(AppointmentTestBase):
     def test_db_rejects_overlapping_active_appointments(self):
         from django.db import IntegrityError, transaction

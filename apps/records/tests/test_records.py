@@ -1,3 +1,4 @@
+import uuid
 from io import BytesIO
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -6,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.appointments.tests.test_appointments import _register_and_login, patient_payload
+from apps.family.models import Dependent
 from apps.records.models import MedicalRecord
 
 RECORDS_URL = '/api/records/'
@@ -134,6 +136,55 @@ class UploadValidationTests(MedicalRecordTestBase):
         self.as_anonymous()
         res = self._upload(_pdf_file())
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class DependentRecordTests(MedicalRecordTestBase):
+    """dependent_id validation on MedicalRecordCreateSerializer — submitted
+    as a plain multipart form field, same shared resolve_dependent() rule as
+    booking/medications."""
+
+    def _patient(self):
+        from django.contrib.auth import get_user_model
+        return get_user_model().objects.get(email='patient@test.com')
+
+    def setUp(self):
+        super().setUp()
+        self.dependent = Dependent.objects.create(
+            managed_by=self._patient(), first_name='Kid', last_name='Doe', relationship='child',
+        )
+
+    def test_upload_with_own_active_dependent_returns_201(self):
+        res = self._upload(_pdf_file(), dependent_id=str(self.dependent.id))
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['dependent']['id'], str(self.dependent.id))
+        record = MedicalRecord.objects.get(pk=res.data['id'])
+        self.assertEqual(record.dependent_id, self.dependent.id)
+        self.assertEqual(record.patient_id, self._patient().id)
+
+    def test_upload_without_dependent_id_leaves_dependent_null(self):
+        res = self._upload(_pdf_file())
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(res.data['dependent'])
+
+    def test_upload_with_someone_elses_dependent_returns_400(self):
+        other_token = _register_and_login(self.client, patient_payload(email='dep-other@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+        res = self._upload(_pdf_file(), dependent_id=str(self.dependent.id))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
+        self.assertEqual(MedicalRecord.objects.count(), 0)
+
+    def test_upload_with_nonexistent_dependent_returns_400(self):
+        res = self._upload(_pdf_file(), dependent_id=str(uuid.uuid4()))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
+
+    def test_upload_with_inactive_dependent_returns_400(self):
+        self.dependent.is_active = False
+        self.dependent.save(update_fields=['is_active'])
+        res = self._upload(_pdf_file(), dependent_id=str(self.dependent.id))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('dependent_id', res.data['errors'])
 
 
 class RecordListDetailTests(MedicalRecordTestBase):

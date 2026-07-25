@@ -30,7 +30,7 @@ class AppointmentPrescriptionView(APIView):
 
     def get(self, request, pk):
         try:
-            appointment = Appointment.objects.select_related('doctor', 'patient').get(pk=pk)
+            appointment = Appointment.objects.select_related('doctor', 'patient', 'dependent').get(pk=pk)
         except Appointment.DoesNotExist:
             raise NotFound()
         # Not 403 — a bare 404 avoids confirming the appointment exists to a
@@ -45,7 +45,7 @@ class AppointmentPrescriptionView(APIView):
 
     def post(self, request, pk):
         try:
-            appointment = Appointment.objects.select_related('doctor', 'patient').get(
+            appointment = Appointment.objects.select_related('doctor', 'patient', 'dependent').get(
                 pk=pk, doctor=request.user,
             )
         except Appointment.DoesNotExist:
@@ -74,7 +74,7 @@ class PatientPrescriptionListView(APIView):
     def get(self, request):
         qs = (
             Prescription.objects.filter(patient=request.user)
-            .select_related('doctor', 'patient')
+            .select_related('doctor', 'patient', 'dependent')
             .prefetch_related('items')
             .order_by('-issued_at')
         )
@@ -90,7 +90,8 @@ class PrescriptionDetailView(APIView):
     def get(self, request, pk):
         try:
             prescription = (
-                Prescription.objects.select_related('doctor', 'patient').prefetch_related('items').get(pk=pk)
+                Prescription.objects.select_related('doctor', 'patient', 'dependent')
+                .prefetch_related('items').get(pk=pk)
             )
         except Prescription.DoesNotExist:
             raise NotFound()

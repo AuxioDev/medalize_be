@@ -2,6 +2,7 @@ from rest_framework import status
 
 from apps.appointments.models import Appointment
 from apps.appointments.tests.test_appointments import AppointmentTestBase, _register_and_login, patient_payload
+from apps.family.models import Dependent
 from apps.medications.models import Medication
 from apps.notifications.models import Notification
 from apps.notifications.tasks import send_prescription_issued
@@ -144,6 +145,43 @@ class IssuePrescriptionTests(PrescriptionTestBase):
             _prescription_url(self.completed_appointment.id), {'items': _items_payload()}, format='json',
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class PrescriptionDependentInheritanceTests(PrescriptionTestBase):
+    """Prescription.dependent is denormalized from appointment.dependent at
+    creation time — same as doctor/patient — with no separate input."""
+
+    def setUp(self):
+        super().setUp()
+        self.dependent = Dependent.objects.create(
+            managed_by=self.patient, first_name='Kid', last_name='Doe', relationship='child',
+        )
+        self.dependent_appointment = self._make_appointment(
+            status=Appointment.STATUS_COMPLETED, dependent=self.dependent,
+            starts_at=self._future_dt(15), ends_at=self._future_dt(15, 30),
+        )
+
+    def test_prescription_inherits_dependent_from_appointment(self):
+        self.as_doctor()
+        res = self.client.post(
+            _prescription_url(self.dependent_appointment.id), {'items': _items_payload()}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['dependent']['id'], str(self.dependent.id))
+        prescription = Prescription.objects.get(appointment=self.dependent_appointment)
+        self.assertEqual(prescription.dependent_id, self.dependent.id)
+        # patient stays the account owner, unaffected by dependent.
+        self.assertEqual(prescription.patient, self.patient)
+
+    def test_prescription_dependent_is_null_when_appointment_has_none(self):
+        self.as_doctor()
+        res = self.client.post(
+            _prescription_url(self.completed_appointment.id), {'items': _items_payload()}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(res.data['dependent'])
+        prescription = Prescription.objects.get(appointment=self.completed_appointment)
+        self.assertIsNone(prescription.dependent_id)
 
 
 class GetPrescriptionTests(PrescriptionTestBase):

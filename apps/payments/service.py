@@ -96,6 +96,7 @@ def get_or_create_payment(appointment):
     return Payment.objects.create(
         appointment=appointment,
         patient=appointment.patient,
+        dependent=appointment.dependent,
         doctor=doctor,
         amount=fee,
         currency='AZN',
