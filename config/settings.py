@@ -179,6 +179,7 @@ REST_FRAMEWORK = {
         'email_change': '3/minute',
         'fcm_register': '20/hour',
         'assistant_message': '30/hour',
+        'messaging_message': '60/minute',
     },
 }
 

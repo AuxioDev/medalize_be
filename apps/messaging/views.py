@@ -1,7 +1,8 @@
 import logging
 
+from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Q
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
@@ -23,6 +24,14 @@ logger = logging.getLogger(__name__)
 MAX_MESSAGE_LENGTH = 4000
 
 
+def _messaging_enabled():
+    # Message.body reuses the same EncryptedTextField/ASSISTANT_ENCRYPTION_KEY
+    # as apps.assistant — an empty key must disable sending, not 500 on every
+    # message. See apps/assistant/checks.py::check_assistant_encryption_key
+    # (assistant.W001), which already documents this exact risk.
+    return bool(getattr(settings, 'ASSISTANT_ENCRYPTION_KEY', ''))
+
+
 class ThreadListCreateView(APIView):
     """Both patient and doctor are equal participants: IsAuthenticated plus
     explicit per-object participant checks, mirroring
@@ -32,13 +41,36 @@ class ThreadListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        # Annotate the last-message id and unread count on the queryset itself
+        # instead of letting ThreadSerializer query per-object — avoids 2N
+        # extra queries per page (see ThreadSerializer.get_last_message /
+        # get_unread_count, which prefer these annotations when present).
+        last_message_qs = Message.objects.filter(thread=OuterRef('pk')).order_by('-created_at')
         qs = (
             Thread.objects
             .filter(Q(patient=request.user) | Q(doctor=request.user))
             .select_related('patient', 'doctor', 'doctor__doctor_profile')
+            .annotate(
+                last_message_id=Subquery(last_message_qs.values('id')[:1]),
+                unread_count_ann=Count(
+                    'messages',
+                    filter=Q(messages__read_at__isnull=True) & ~Q(messages__sender=request.user),
+                ),
+            )
         )
-        serializer = ThreadSerializer(qs, many=True, context={'request': request})
-        return Response(serializer.data)
+        paginator = PageNumberPagination()
+        paginator.page_size = 20
+        page = paginator.paginate_queryset(qs, request)
+
+        message_ids = [t.last_message_id for t in page if t.last_message_id]
+        messages_by_id = {
+            m.id: m for m in Message.objects.filter(id__in=message_ids).select_related('sender')
+        }
+        for thread in page:
+            thread.prefetched_last_message = messages_by_id.get(thread.last_message_id)
+
+        serializer = ThreadSerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         participant_id = request.data.get('participant_id')
@@ -79,6 +111,14 @@ class ThreadListCreateView(APIView):
 class ThreadMessageListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get_throttles(self):
+        # Only scope-throttle POST (sending): GET is polled periodically by
+        # the mobile chat screen and must stay under the generic `user` rate,
+        # not the tighter anti-spam budget meant for message sends.
+        if self.request.method == 'POST':
+            self.throttle_scope = 'messaging_message'
+        return super().get_throttles()
+
     def _get_thread(self, request, pk):
         try:
             thread = Thread.objects.select_related('patient', 'doctor').get(pk=pk)
@@ -105,6 +145,11 @@ class ThreadMessageListCreateView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     def post(self, request, pk):
+        if not _messaging_enabled():
+            return Response(
+                {'detail': 'Messaging is temporarily unavailable.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         thread = self._get_thread(request, pk)
 
         body = request.data.get('body')

@@ -197,7 +197,15 @@ class RecordListDetailTests(MedicalRecordTestBase):
         self.as_patient()
         res = self.client.get(RECORDS_URL)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data['count'], 1)
+        self.assertEqual(len(res.data['results']), 1)
+
+    def test_list_response_is_paginated(self):
+        self._upload(_pdf_file())
+        res = self.client.get(RECORDS_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        for key in ('count', 'next', 'previous', 'results'):
+            self.assertIn(key, res.data)
 
     def test_get_returns_signed_file_url(self):
         create_res = self._upload(_pdf_file())

@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import connection
+from django.test import override_settings
 from rest_framework import status
 
 from apps.appointments.tests.test_appointments import (
@@ -107,22 +108,85 @@ class ThreadListTests(MessagingTestBase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {outsider_token}')
         res = self.client.get(THREADS_URL)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data, [])
+        self.assertEqual(res.data['count'], 0)
+        self.assertEqual(res.data['results'], [])
 
     def test_both_participants_see_the_thread(self):
         self.as_patient()
         self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
 
         res = self.client.get(THREADS_URL)
-        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data['count'], 1)
 
         self.as_doctor()
         res = self.client.get(THREADS_URL)
-        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data['count'], 1)
 
     def test_list_requires_authentication(self):
         res = self.client.get(THREADS_URL)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ThreadListPaginationAndFieldsTests(MessagingTestBase):
+    def test_list_response_is_paginated(self):
+        self.as_patient()
+        self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        res = self.client.get(THREADS_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        for key in ('count', 'next', 'previous', 'results'):
+            self.assertIn(key, res.data)
+
+    def test_last_message_and_unread_count_reflect_reality(self):
+        self.as_patient()
+        res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        thread_id = res.data['id']
+        self.client.post(messages_url(thread_id), {'body': 'first'}, format='json')
+        self.client.post(messages_url(thread_id), {'body': 'second'}, format='json')
+
+        self.as_doctor()
+        res = self.client.get(THREADS_URL)
+        thread_data = res.data['results'][0]
+        self.assertEqual(thread_data['last_message']['body'], 'second')
+        self.assertEqual(thread_data['unread_count'], 2)
+
+        self.client.get(messages_url(thread_id))
+        res = self.client.get(THREADS_URL)
+        self.assertEqual(res.data['results'][0]['unread_count'], 0)
+
+    def test_list_with_no_messages_yet_has_null_last_message(self):
+        self.as_patient()
+        self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        res = self.client.get(THREADS_URL)
+        thread_data = res.data['results'][0]
+        self.assertIsNone(thread_data['last_message'])
+        self.assertEqual(thread_data['unread_count'], 0)
+
+    def test_list_query_count_does_not_scale_with_thread_count(self):
+        """Regression guard for the N+1 fixed in ThreadListCreateView.get():
+        query count must stay flat as the number of threads on the page grows,
+        not scale 2x per thread (get_last_message/get_unread_count used to
+        each run a fresh query per thread)."""
+        self.as_patient()
+        for i in range(4):
+            other_patient_token = _register_and_login(
+                self.client, patient_payload(email=f'msg-patient{i}@test.com'),
+            )
+            other_patient = User.objects.get(email=f'msg-patient{i}@test.com')
+            self._make_appointment(patient=other_patient, starts_at=self._future_dt(13 + i))
+
+            self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_patient_token}')
+            res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+            thread_id = res.data['id']
+            self.client.post(messages_url(thread_id), {'body': 'hi'}, format='json')
+            self.client.post(messages_url(thread_id), {'body': 'hi again'}, format='json')
+
+        self.as_doctor()
+        # 1) auth user lookup, 2) paginator count, 3) annotated thread query,
+        # 4) batch fetch of last messages by id — flat regardless of how many
+        # threads/messages exist, unlike the old 2N+1 pattern.
+        with self.assertNumQueries(4):
+            res = self.client.get(THREADS_URL)
+        self.assertEqual(res.data['count'], 4)
 
 
 class ThreadMessageTests(MessagingTestBase):
@@ -279,3 +343,52 @@ class NewMessagePushTaskTests(MessagingTestBase):
         before = Notification.objects.count()
         send_new_message(str(uuid.uuid4()))
         self.assertEqual(Notification.objects.count(), before)
+
+
+@override_settings(ASSISTANT_ENCRYPTION_KEY='')
+class MessagingDisabledTests(MessagingTestBase):
+    """Message.body shares ASSISTANT_ENCRYPTION_KEY/EncryptedTextField with
+    apps.assistant — an unset key must disable sending (503), not 500."""
+
+    def setUp(self):
+        super().setUp()
+        self.as_patient()
+        res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        self.thread_id = res.data['id']
+
+    def test_sending_message_returns_503_when_key_unset(self):
+        res = self.client.post(messages_url(self.thread_id), {'body': 'Hi'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(Message.objects.count(), 0)
+
+    def test_reading_messages_is_not_gated_when_key_unset(self):
+        res = self.client.get(messages_url(self.thread_id))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_thread_creation_is_not_gated_when_key_unset(self):
+        # The thread was already created in setUp while the key was unset —
+        # its mere existence proves ThreadListCreateView.post isn't gated.
+        self.assertTrue(Thread.objects.filter(pk=self.thread_id).exists())
+
+
+class MessageThrottleTests(MessagingTestBase):
+    def setUp(self):
+        super().setUp()
+        self.as_patient()
+        res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        self.thread_id = res.data['id']
+
+    def test_sending_is_throttled_after_60_per_minute(self):
+        for _ in range(60):
+            res = self.client.post(messages_url(self.thread_id), {'body': 'hi'}, format='json')
+            self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        res = self.client.post(messages_url(self.thread_id), {'body': 'hi'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_throttle_does_not_apply_to_reading_messages(self):
+        for _ in range(60):
+            self.client.post(messages_url(self.thread_id), {'body': 'hi'}, format='json')
+        # The 61st POST above would 429, but GET (chat polling) must stay
+        # unaffected by the send-scoped throttle — see get_throttles().
+        res = self.client.get(messages_url(self.thread_id))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)

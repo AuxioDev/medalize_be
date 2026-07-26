@@ -4,6 +4,7 @@ from io import BytesIO
 from PIL import Image
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -62,9 +63,11 @@ class MedicalRecordListCreateView(APIView):
             .select_related('dependent')
             .order_by('-record_date', '-created_at')
         )
-        return Response(
-            MedicalRecordSerializer(records, many=True, context={'request': request}).data
-        )
+        paginator = PageNumberPagination()
+        paginator.page_size = 20
+        page = paginator.paginate_queryset(records, request)
+        serializer = MedicalRecordSerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         file = request.FILES.get('file')

@@ -28,12 +28,20 @@ class ThreadSerializer(serializers.ModelSerializer):
         fields = ['id', 'patient', 'doctor', 'updated_at', 'last_message', 'unread_count']
 
     def get_last_message(self, obj):
-        last = obj.messages.order_by('-created_at').first()
+        # ThreadListCreateView.get() annotates this via a batch query to avoid
+        # N+1; fall back to a per-object query for e.g. the single freshly
+        # created/fetched Thread returned by ThreadListCreateView.post().
+        if hasattr(obj, 'prefetched_last_message'):
+            last = obj.prefetched_last_message
+        else:
+            last = obj.messages.order_by('-created_at').first()
         if last is None:
             return None
         return MessageSerializer(last, context=self.context).data
 
     def get_unread_count(self, obj):
+        if hasattr(obj, 'unread_count_ann'):
+            return obj.unread_count_ann
         request = self.context.get('request')
         if request is None or not request.user.is_authenticated:
             return 0

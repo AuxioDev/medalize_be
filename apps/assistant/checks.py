@@ -17,10 +17,10 @@ def check_assistant_encryption_key(app_configs, **kwargs):
             Warning(
                 'ASSISTANT_ENCRYPTION_KEY is not set.',
                 hint=(
-                    'This disables the AI assistant, as documented — but '
-                    'apps.messaging.Message.body uses the same EncryptedTextField '
-                    'and is not optional, so patient-doctor messaging will fail '
-                    'with a 500 on every send until this is set. ' + _GENERATE_HINT
+                    'This disables the AI assistant, as documented, and also disables '
+                    'patient-doctor messaging (apps.messaging.Message.body uses the same '
+                    'EncryptedTextField) — both now answer 503 instead of crashing. '
+                    + _GENERATE_HINT
                 ),
                 id='assistant.W001',
             )
