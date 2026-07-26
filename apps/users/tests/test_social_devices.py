@@ -140,7 +140,7 @@ class UserDeviceTests(SocialAuthTestCase):
         super().setUp()
         self.client.post(REGISTER_URL, {
             'email': 'patient@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe',
+            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe', 'privacy_consent': True,
         }, format='json')
         cache.clear()
         mail.outbox = []
@@ -213,7 +213,7 @@ class UserDeviceTests(SocialAuthTestCase):
         device = UserDevice.objects.get(device_id='device-1')
         self.client.post(REGISTER_URL, {
             'email': 'other@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-            'role': 'patient', 'first_name': 'Other', 'last_name': 'User',
+            'role': 'patient', 'first_name': 'Other', 'last_name': 'User', 'privacy_consent': True,
         }, format='json')
         cache.clear()
         other = self.client.post(LOGIN_URL, {'email': 'other@test.com', 'password': 'Pass1234'}, format='json')

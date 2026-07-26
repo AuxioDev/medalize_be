@@ -84,6 +84,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default='en')
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    # Audit trail for the explicit written consent Azerbaijan's Law on
+    # Personal Data (No. 998-IIIQ) requires specifically for special-category
+    # data (health data is one) — a checkbox the mobile app merely disables
+    # submission on isn't provable after the fact; this timestamp is. Set
+    # once at registration (RegisterSerializer), never cleared afterward.
+    privacy_consent_accepted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

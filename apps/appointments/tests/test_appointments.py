@@ -21,14 +21,14 @@ DOCTOR_APPOINTMENTS_URL = '/api/doctor/appointments/'
 
 def doctor_payload(**kwargs):
     data = {'email': 'doctor@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-            'role': 'doctor', 'first_name': 'John', 'last_name': 'Smith'}
+            'role': 'doctor', 'first_name': 'John', 'last_name': 'Smith', 'privacy_consent': True}
     data.update(kwargs)
     return data
 
 
 def patient_payload(**kwargs):
     data = {'email': 'patient@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe'}
+            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe', 'privacy_consent': True}
     data.update(kwargs)
     return data
 

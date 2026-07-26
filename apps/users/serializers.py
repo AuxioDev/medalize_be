@@ -83,6 +83,19 @@ class RegisterSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
     phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    # Must be explicitly true — this is the written consent Azerbaijan's Law
+    # on Personal Data requires for special-category data (health data is
+    # one), not a generic "I agree to Terms" checkbox. The mobile app's
+    # registration screen disables submission until this is checked; the
+    # backend re-validates it rather than trusting client-side UI state.
+    privacy_consent = serializers.BooleanField(write_only=True)
+
+    def validate_privacy_consent(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                'You must accept the Privacy Policy to create an account.'
+            )
+        return value
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -106,8 +119,13 @@ class RegisterSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         validated_data.pop('password_confirm')
+        validated_data.pop('privacy_consent')
         password = validated_data.pop('password')
-        return User.objects.create_user(password=password, **validated_data)
+        return User.objects.create_user(
+            password=password,
+            privacy_consent_accepted_at=timezone.now(),
+            **validated_data,
+        )
 
 
 class PatientProfileSerializer(serializers.ModelSerializer):

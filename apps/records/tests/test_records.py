@@ -52,7 +52,7 @@ class MedicalRecordTestBase(APITestCase):
         self.doctor_token = _register_and_login(
             self.client, {
                 'email': 'doctor@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-                'role': 'doctor', 'first_name': 'John', 'last_name': 'Smith',
+                'role': 'doctor', 'first_name': 'John', 'last_name': 'Smith', 'privacy_consent': True,
             },
         )
         self.as_patient()

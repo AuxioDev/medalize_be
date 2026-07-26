@@ -16,7 +16,7 @@ NOTIFICATIONS_URL = '/api/notifications/'
 
 def patient_payload(**kwargs):
     data = {'email': 'patient@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe'}
+            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe', 'privacy_consent': True}
     data.update(kwargs)
     return data
 

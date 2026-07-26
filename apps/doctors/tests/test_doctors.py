@@ -23,6 +23,7 @@ def doctor_payload(**kwargs):
         'role': 'doctor',
         'first_name': 'John',
         'last_name': 'Smith',
+        'privacy_consent': True,
     }
     data.update(kwargs)
     return data
@@ -36,6 +37,7 @@ def patient_payload(**kwargs):
         'role': 'patient',
         'first_name': 'Jane',
         'last_name': 'Doe',
+        'privacy_consent': True,
     }
     data.update(kwargs)
     return data

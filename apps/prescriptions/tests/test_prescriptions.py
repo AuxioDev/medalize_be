@@ -117,7 +117,7 @@ class IssuePrescriptionTests(PrescriptionTestBase):
         other_doctor_token = _register_and_login(
             self.client, {
                 'email': 'other-doc@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-                'role': 'doctor', 'first_name': 'Other', 'last_name': 'Doc',
+                'role': 'doctor', 'first_name': 'Other', 'last_name': 'Doc', 'privacy_consent': True,
             },
         )
         # Must be verified too, or IsDoctorVerified (403) would mask the 404

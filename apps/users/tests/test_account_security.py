@@ -28,7 +28,7 @@ class AccountSecurityTestCase(APITestCase):
         cache.clear()
         self.client.post(REGISTER_URL, {
             'email': 'patient@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe',
+            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe', 'privacy_consent': True,
         }, format='json')
         cache.clear()
         self.user = User.objects.get(email='patient@test.com')

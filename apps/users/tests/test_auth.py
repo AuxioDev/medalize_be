@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
@@ -18,14 +19,14 @@ SPECIALIZATIONS_URL = '/api/doctors/specializations/'
 
 def patient_payload(**kwargs):
     data = {'email': 'patient@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe'}
+            'role': 'patient', 'first_name': 'Jane', 'last_name': 'Doe', 'privacy_consent': True}
     data.update(kwargs)
     return data
 
 
 def doctor_payload(**kwargs):
     data = {'email': 'doctor@test.com', 'password': 'Pass1234', 'password_confirm': 'Pass1234',
-            'role': 'doctor', 'first_name': 'John', 'last_name': 'Smith'}
+            'role': 'doctor', 'first_name': 'John', 'last_name': 'Smith', 'privacy_consent': True}
     data.update(kwargs)
     return data
 
@@ -60,6 +61,27 @@ class RegisterTests(AuthTestCase):
         cache.clear()
         res = self.client.post(REGISTER_URL, patient_payload(), format='json')
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_without_privacy_consent_returns_400(self):
+        res = self.client.post(
+            REGISTER_URL, patient_payload(privacy_consent=False), format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.filter(email='patient@test.com').exists())
+
+    def test_register_missing_privacy_consent_returns_400(self):
+        payload = patient_payload()
+        del payload['privacy_consent']
+        res = self.client.post(REGISTER_URL, payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_stamps_privacy_consent_timestamp(self):
+        before = timezone.now()
+        res = self.client.post(REGISTER_URL, patient_payload(), format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(pk=res.data['user_id'])
+        self.assertIsNotNone(user.privacy_consent_accepted_at)
+        self.assertGreaterEqual(user.privacy_consent_accepted_at, before)
 
 
 class LoginTests(AuthTestCase):
