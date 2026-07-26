@@ -180,6 +180,13 @@ REST_FRAMEWORK = {
         'fcm_register': '20/hour',
         'assistant_message': '30/hour',
         'messaging_message': '60/minute',
+        # Pre-launch hardening: these previously relied only on the generic
+        # `user: 1000/minute` default, which is far too generous for actions
+        # with a real cost (Cloudinary storage/bandwidth per upload) or an
+        # abuse surface (spam-booking/cancelling slots other patients want).
+        'appointment_book': '20/hour',
+        'appointment_mutate': '30/hour',
+        'file_upload': '30/hour',
     },
 }
 
@@ -275,6 +282,13 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    # Defense-in-depth backstop — nginx already 301s HTTP→HTTPS
+    # (nginx/default.conf), but this makes Django itself refuse to serve a
+    # plain-HTTP request too, in case nginx is ever misconfigured or
+    # bypassed. Safe with SECURE_PROXY_SSL_HEADER below (already set) — a
+    # real HTTPS request through nginx carries X-Forwarded-Proto: https, so
+    # this doesn't loop-redirect proxied traffic.
+    SECURE_SSL_REDIRECT = True
 
 LOGGING = {
     'version': 1,

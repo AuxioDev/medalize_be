@@ -350,6 +350,7 @@ class OnboardingCompleteView(APIView):
 class DiplomaUploadView(APIView):
     permission_classes = [IsDoctor]
     parser_classes = [MultiPartParser]
+    throttle_scope = 'file_upload'
 
     def post(self, request):
         file = request.FILES.get('diploma')

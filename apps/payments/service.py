@@ -1,9 +1,11 @@
 import logging
 
 from django.conf import settings
+from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.appointments.models import Appointment
 from apps.notifications.i18n import recipient_language
 
 from .models import Payment
@@ -59,52 +61,66 @@ def get_or_create_payment(appointment):
       is OneToOne, so there is never more than one Payment row per
       appointment to retry against);
     - otherwise a brand new Payment is created.
+
+    Wrapped in select_for_update() on the appointment row: without it, two
+    near-simultaneous calls (double-tap "Pay", or a retried request) can both
+    read "no payment yet", both call the provider, and then race on the
+    OneToOneField insert — one succeeds, the other hits an IntegrityError
+    (surfaced as a raw 500) after already having opened a second, orphaned
+    order with Payriff. Locking the appointment row serializes the two calls
+    so the second one sees the first's just-created PENDING payment and
+    returns it instead of creating a duplicate. The lock is held across the
+    provider.create_order() network call deliberately — the race window is
+    exactly that call, and this endpoint is single-appointment-scoped
+    (one patient paying for their own booking), not high-concurrency.
     """
-    try:
-        payment = appointment.payment
-    except Payment.DoesNotExist:
-        payment = None
+    with transaction.atomic():
+        appointment = Appointment.objects.select_for_update().get(pk=appointment.pk)
+        try:
+            payment = appointment.payment
+        except Payment.DoesNotExist:
+            payment = None
 
-    if payment is not None and payment.status in (Payment.STATUS_PENDING, Payment.STATUS_PAID):
-        return payment
+        if payment is not None and payment.status in (Payment.STATUS_PENDING, Payment.STATUS_PAID):
+            return payment
 
-    doctor = appointment.doctor
-    fee = getattr(doctor.doctor_profile, 'consultation_fee', None) or 0
-    lang = recipient_language(appointment.patient)
+        doctor = appointment.doctor
+        fee = getattr(doctor.doctor_profile, 'consultation_fee', None) or 0
+        lang = recipient_language(appointment.patient)
 
-    provider = get_provider()
-    order = provider.create_order(
-        amount=fee,
-        currency='AZN',
-        description=f'Medalize — {_doctor_display_name(doctor)}',
-        approve_url=_return_url('approve', lang),
-        cancel_url=_return_url('cancel', lang),
-        decline_url=_return_url('decline', lang),
-    )
+        provider = get_provider()
+        order = provider.create_order(
+            amount=fee,
+            currency='AZN',
+            description=f'Medalize — {_doctor_display_name(doctor)}',
+            approve_url=_return_url('approve', lang),
+            cancel_url=_return_url('cancel', lang),
+            decline_url=_return_url('decline', lang),
+        )
 
-    if payment is not None:
-        payment.amount = fee
-        payment.status = Payment.STATUS_PENDING
-        payment.provider = 'payriff'
-        payment.provider_order_id = order.order_id
-        payment.provider_session_id = order.session_id
-        payment.payment_url = order.payment_url
-        payment.paid_at = None
-        payment.save()
-        return payment
+        if payment is not None:
+            payment.amount = fee
+            payment.status = Payment.STATUS_PENDING
+            payment.provider = 'payriff'
+            payment.provider_order_id = order.order_id
+            payment.provider_session_id = order.session_id
+            payment.payment_url = order.payment_url
+            payment.paid_at = None
+            payment.save()
+            return payment
 
-    return Payment.objects.create(
-        appointment=appointment,
-        patient=appointment.patient,
-        dependent=appointment.dependent,
-        doctor=doctor,
-        amount=fee,
-        currency='AZN',
-        provider='payriff',
-        provider_order_id=order.order_id,
-        provider_session_id=order.session_id,
-        payment_url=order.payment_url,
-    )
+        return Payment.objects.create(
+            appointment=appointment,
+            patient=appointment.patient,
+            dependent=appointment.dependent,
+            doctor=doctor,
+            amount=fee,
+            currency='AZN',
+            provider='payriff',
+            provider_order_id=order.order_id,
+            provider_session_id=order.session_id,
+            payment_url=order.payment_url,
+        )
 
 
 def handle_webhook_ping(provider_order_id):

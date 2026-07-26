@@ -57,6 +57,13 @@ class MedicalRecordListCreateView(APIView):
     permission_classes = [IsPatient]
     parser_classes = [MultiPartParser]
 
+    def get_throttles(self):
+        # Only scope-throttle POST (uploading) — GET (the patient's own
+        # records list) stays under the generic `user` rate.
+        if self.request.method == 'POST':
+            self.throttle_scope = 'file_upload'
+        return super().get_throttles()
+
     def get(self, request):
         records = (
             MedicalRecord.objects.filter(patient=request.user)

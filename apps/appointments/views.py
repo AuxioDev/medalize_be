@@ -354,6 +354,14 @@ class SlotListView(APIView):
 class PatientAppointmentListCreateView(APIView):
     permission_classes = [IsPatient]
 
+    def get_throttles(self):
+        # Only scope-throttle POST (booking a slot) — GET is the patient's
+        # own appointment list, fetched routinely by the app, and must stay
+        # under the generic `user` rate, not the tighter booking budget.
+        if self.request.method == 'POST':
+            self.throttle_scope = 'appointment_book'
+        return super().get_throttles()
+
     def get(self, request):
         qs = (
             Appointment.objects
@@ -429,6 +437,13 @@ class PatientAppointmentListCreateView(APIView):
 class PatientAppointmentDetailView(APIView):
     permission_classes = [IsPatient]
 
+    def get_throttles(self):
+        # Only scope-throttle DELETE (cancelling) — GET (viewing a single
+        # appointment's detail) stays under the generic `user` rate.
+        if self.request.method == 'DELETE':
+            self.throttle_scope = 'appointment_mutate'
+        return super().get_throttles()
+
     def _get(self, pk, patient):
         try:
             return (
@@ -501,6 +516,7 @@ class DoctorNextSlotView(APIView):
 
 class PatientAppointmentRescheduleView(APIView):
     permission_classes = [IsPatient]
+    throttle_scope = 'appointment_mutate'
 
     def patch(self, request, pk):
         try:

@@ -613,6 +613,7 @@ class EmailChangeConfirmView(APIView):
 class AvatarUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
+    throttle_scope = 'file_upload'
 
     def post(self, request):
         file = request.FILES.get('avatar')
