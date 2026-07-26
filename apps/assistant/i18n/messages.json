@@ -22,5 +22,21 @@
     "tr": "Yapay zekâ asistanı geçici olarak kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
     "fr": "L'assistant IA est temporairement indisponible. Veuillez réessayer plus tard.",
     "zh": "AI 助手暂时不可用，请稍后重试。"
+  },
+  "emergency_warning": {
+    "en": "Based on what you described, this could be a medical emergency. Please call emergency services or go to the nearest emergency room right now — do not wait.",
+    "ru": "То, что вы описали, может быть неотложным состоянием. Пожалуйста, немедленно вызовите скорую помощь или обратитесь в ближайшее отделение неотложной помощи — не откладывайте.",
+    "az": "Təsvir etdiyiniz vəziyyət təcili tibbi yardım tələb edə bilər. Zəhmət olmasa dərhal təcili yardım xidmətinə zəng edin və ya ən yaxın təcili yardım şöbəsinə müraciət edin — gözləməyin.",
+    "tr": "Anlattıklarınız acil bir tıbbi durum olabilir. Lütfen hemen acil servisi arayın veya en yakın acil servise gidin — beklemeyin.",
+    "fr": "D'après ce que vous décrivez, il pourrait s'agir d'une urgence médicale. Veuillez appeler immédiatement les services d'urgence ou vous rendre au service des urgences le plus proche — n'attendez pas.",
+    "zh": "根据您描述的情况，这可能是医疗紧急情况。请立即拨打急救电话或前往最近的急诊室——不要等待。"
+  },
+  "assistant_unclear": {
+    "en": "I don't understand what you're asking. Could you rephrase your question about your symptoms, a condition, or finding a doctor?",
+    "ru": "Я не понимаю о чём вы. Пожалуйста, переформулируйте вопрос о симптомах, заболевании или поиске врача.",
+    "az": "Nə demək istədiyinizi anlamadım. Zəhmət olmasa simptomlarınız, xəstəliyiniz və ya həkim tapmaqla bağlı sualınızı başqa cür ifadə edin.",
+    "tr": "Ne sormak istediğinizi anlamadım. Lütfen semptomlarınız, hastalığınız veya doktor bulma ile ilgili sorunuzu farklı şekilde ifade eder misiniz?",
+    "fr": "Je ne comprends pas votre question. Pourriez-vous reformuler votre question sur vos symptômes, une maladie ou la recherche d'un médecin ?",
+    "zh": "我不明白您在问什么。能否换一种方式描述您的症状、病情或寻找医生的问题？"
   }
 }

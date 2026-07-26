@@ -347,11 +347,9 @@ STORAGES = {
     },
 }
 
-# ── AI symptom assistant (Anthropic Claude) ──────────────────────────────────
-# Both values must be set for the assistant feature to be enabled; leave either
-# blank to disable it (all /api/assistant/ endpoints answer 503). Neither is
-# needed for migrations — only for runtime API calls and message encryption.
-ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+# ── AI symptom assistant (local template matching, no external API) ─────────
+# Leave blank to disable the feature (all /api/assistant/ endpoints answer
+# 503). Not needed for migrations — only for message encryption at runtime.
 ASSISTANT_ENCRYPTION_KEY = env('ASSISTANT_ENCRYPTION_KEY', default='')
 
 # Firebase Admin SDK for FCM push notifications.

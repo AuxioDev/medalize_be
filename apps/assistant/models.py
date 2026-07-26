@@ -5,6 +5,13 @@ from django.db import models
 
 from .fields import EncryptedTextField
 
+_SPECIALIZATION_CODES = [
+    'general_practice', 'cardiology', 'dermatology', 'neurology', 'orthopedics',
+    'pediatrics', 'psychiatry', 'gynecology', 'urology', 'ophthalmology',
+    'ent', 'oncology', 'endocrinology', 'gastroenterology', 'pulmonology',
+    'radiology', 'anesthesiology', 'emergency_medicine',
+]
+
 
 class Conversation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -15,12 +22,6 @@ class Conversation(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    # Structured, patient-shareable report generated on demand by
-    # generate_summary() — see apps/assistant/service.py. Raw dict shaped by
-    # the record_summary tool schema (_SUMMARY_TOOL), not a fixed set of
-    # columns, same JSONField approach as Message.suggested_doctors.
-    summary = models.JSONField(null=True, blank=True)
-    summary_generated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-updated_at']
@@ -52,3 +53,24 @@ class Message(models.Model):
 
     def __str__(self):
         return f'{self.role} message {self.id}'
+
+
+class ResponseTemplate(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # {'en': ['headache', 'migraine, throbbing pain'], 'ru': [...], ...}
+    triggers = models.JSONField(default=dict)
+    # {'en': 'answer text', 'ru': '...', ...} — without the disclaimer, which
+    # service.py appends the same way it did for the LLM-generated answers.
+    answers = models.JSONField(default=dict)
+    specialization = models.CharField(
+        max_length=32, blank=True, choices=[(c, c) for c in _SPECIALIZATION_CODES],
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'Template {self.id} ({self.specialization or "general"})'

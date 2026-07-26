@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Conversation, Message
+from .models import Conversation, Message, ResponseTemplate
 
 
 @admin.register(Conversation)
@@ -18,3 +18,10 @@ class MessageAdmin(admin.ModelAdmin):
     # the owner's email are the moderation entry points.
     search_fields = ['conversation__patient__email', 'flag_reason']
     ordering = ['-created_at']
+
+
+@admin.register(ResponseTemplate)
+class ResponseTemplateAdmin(admin.ModelAdmin):
+    list_display = ['id', 'specialization', 'is_active', 'updated_at']
+    list_filter = ['is_active', 'specialization']
+    ordering = ['-updated_at']

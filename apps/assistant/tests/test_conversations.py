@@ -1,5 +1,4 @@
 import uuid
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import override_settings
@@ -109,8 +108,7 @@ class MessageValidationTests(AssistantTestCase):
 
     def test_send_to_foreign_conversation_returns_404(self):
         foreign = Conversation.objects.create(patient=self.other_patient)
-        with patch('apps.assistant.service.classify_is_medical', return_value=False):
-            res = self.client.post(messages_url(foreign.pk), {'content': 'hi'}, format='json')
+        res = self.client.post(messages_url(foreign.pk), {'content': 'hi'}, format='json')
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
 
@@ -165,30 +163,31 @@ class FlagMessageTests(AssistantTestCase):
 class ThrottleTests(AssistantTestCase):
     def test_assistant_message_throttled_after_30_per_hour(self):
         conversation = Conversation.objects.create(patient=self.patient)
-        with patch('apps.assistant.service.classify_is_medical', return_value=False):
-            for _ in range(30):
-                res = self.client.post(
-                    messages_url(conversation.pk), {'content': 'hello'}, format='json'
-                )
-                self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        for _ in range(30):
             res = self.client.post(
                 messages_url(conversation.pk), {'content': 'hello'}, format='json'
             )
+            self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        res = self.client.post(
+            messages_url(conversation.pk), {'content': 'hello'}, format='json'
+        )
         self.assertEqual(res.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
     def test_throttle_does_not_apply_to_conversation_list(self):
         conversation = Conversation.objects.create(patient=self.patient)
-        with patch('apps.assistant.service.classify_is_medical', return_value=False):
-            for _ in range(30):
-                self.client.post(
-                    messages_url(conversation.pk), {'content': 'hello'}, format='json'
-                )
+        for _ in range(30):
+            self.client.post(
+                messages_url(conversation.pk), {'content': 'hello'}, format='json'
+            )
         res = self.client.get(CONVERSATIONS_URL)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
 
-@override_settings(ANTHROPIC_API_KEY='', ASSISTANT_ENCRYPTION_KEY='')
+@override_settings(ASSISTANT_ENCRYPTION_KEY='')
 class FeatureDisabledTests(AssistantTestCase):
+    """Encryption is the only requirement now — chat is local template
+    matching, no external AI API involved anywhere in this app."""
+
     def test_send_message_returns_503(self):
         res = self.client.post(messages_url(uuid.uuid4()), {'content': 'hi'}, format='json')
         self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -212,8 +211,3 @@ class FeatureDisabledTests(AssistantTestCase):
         self.patient.save(update_fields=['language'])
         res = self.client.post(messages_url(uuid.uuid4()), {'content': 'hi'}, format='json')
         self.assertEqual(res.data['detail'], assistant_message('assistant_unavailable', 'ru'))
-
-    def test_disabled_when_only_one_key_set(self):
-        with override_settings(ANTHROPIC_API_KEY='some-key', ASSISTANT_ENCRYPTION_KEY=''):
-            res = self.client.get(CONVERSATIONS_URL)
-        self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
