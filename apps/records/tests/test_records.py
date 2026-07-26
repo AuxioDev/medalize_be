@@ -207,6 +207,21 @@ class RecordListDetailTests(MedicalRecordTestBase):
         for key in ('count', 'next', 'previous', 'results'):
             self.assertIn(key, res.data)
 
+    def test_list_crosses_page_boundary_at_20(self):
+        for i in range(25):
+            self._upload(_pdf_file(name=f'record-{i}.pdf'))
+
+        page1 = self.client.get(RECORDS_URL)
+        self.assertEqual(page1.data['count'], 25)
+        self.assertEqual(len(page1.data['results']), 20)
+        self.assertIsNotNone(page1.data['next'])
+        self.assertIsNone(page1.data['previous'])
+
+        page2 = self.client.get(RECORDS_URL, {'page': 2})
+        self.assertEqual(len(page2.data['results']), 5)
+        self.assertIsNone(page2.data['next'])
+        self.assertIsNotNone(page2.data['previous'])
+
     def test_get_returns_signed_file_url(self):
         create_res = self._upload(_pdf_file())
         res = self.client.get(_detail_url(create_res.data['id']))

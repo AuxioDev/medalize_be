@@ -57,6 +57,11 @@ class ThreadListCreateView(APIView):
                     filter=Q(messages__read_at__isnull=True) & ~Q(messages__sender=request.user),
                 ),
             )
+            # Explicit — annotate()'ing an aggregate (Count) forces a GROUP BY
+            # that silently drops Thread.Meta's implicit `ordering`, which
+            # would otherwise make pagination results non-deterministic
+            # across pages (caught by DRF's UnorderedObjectListWarning).
+            .order_by('-updated_at')
         )
         paginator = PageNumberPagination()
         paginator.page_size = 20

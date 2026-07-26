@@ -1,3 +1,4 @@
+import datetime
 import uuid
 from unittest.mock import patch
 
@@ -6,6 +7,7 @@ from django.db import connection
 from django.test import override_settings
 from rest_framework import status
 
+from apps.appointments.models import Appointment
 from apps.appointments.tests.test_appointments import (
     _register_and_login,
     doctor_payload,
@@ -188,6 +190,42 @@ class ThreadListPaginationAndFieldsTests(MessagingTestBase):
             res = self.client.get(THREADS_URL)
         self.assertEqual(res.data['count'], 4)
 
+    def test_thread_list_crosses_page_boundary_at_20(self):
+        """Unlike the query-count test above (4 threads, proves no N+1), this
+        proves the pagination math itself: 25 real threads must split as
+        20 + 5 across two pages, not all-at-once or some other off-by-one.
+        Users/appointments/threads are created directly via the ORM — going
+        through register/login for 25 patients would trip the register
+        (5/minute) and login (10/minute) throttles."""
+        # A different day than MessagingTestBase's own base appointment
+        # (self._future_dt(10) on self.future_date, from setUp) — otherwise
+        # one of the 25 slots below lands exactly on it and trips the
+        # exclusion constraint.
+        base = self._future_dt(10) + datetime.timedelta(days=5)
+        for i in range(25):
+            other = User.objects.create_user(
+                email=f'thread-patient-{i}@test.com', password='Pass1234', role='patient',
+                first_name='Patient', last_name=str(i),
+            )
+            Appointment.objects.create(
+                doctor=self.doctor, patient=other, workplace=self.workplace,
+                starts_at=base + datetime.timedelta(minutes=40 * i),
+                ends_at=base + datetime.timedelta(minutes=40 * i + 30),
+            )
+            Thread.objects.create(patient=other, doctor=self.doctor)
+
+        self.as_doctor()
+        page1 = self.client.get(THREADS_URL)
+        self.assertEqual(page1.data['count'], 25)
+        self.assertEqual(len(page1.data['results']), 20)
+        self.assertIsNotNone(page1.data['next'])
+        self.assertIsNone(page1.data['previous'])
+
+        page2 = self.client.get(THREADS_URL, {'page': 2})
+        self.assertEqual(len(page2.data['results']), 5)
+        self.assertIsNone(page2.data['next'])
+        self.assertIsNotNone(page2.data['previous'])
+
 
 class ThreadMessageTests(MessagingTestBase):
     def setUp(self):
@@ -288,6 +326,21 @@ class ThreadMessageTests(MessagingTestBase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn('results', res.data)
         self.assertIn('count', res.data)
+
+    def test_message_list_crosses_page_boundary_at_20(self):
+        for i in range(25):
+            self.client.post(messages_url(self.thread_id), {'body': f'message {i}'}, format='json')
+
+        page1 = self.client.get(messages_url(self.thread_id))
+        self.assertEqual(page1.data['count'], 25)
+        self.assertEqual(len(page1.data['results']), 20)
+        self.assertIsNotNone(page1.data['next'])
+        self.assertIsNone(page1.data['previous'])
+
+        page2 = self.client.get(messages_url(self.thread_id), {'page': 2})
+        self.assertEqual(len(page2.data['results']), 5)
+        self.assertIsNone(page2.data['next'])
+        self.assertIsNotNone(page2.data['previous'])
 
 
 class UnreadCountTests(MessagingTestBase):
