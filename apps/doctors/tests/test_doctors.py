@@ -147,6 +147,64 @@ class WorkplaceTests(DoctorAuthTestCase):
         res = self.client.get(WORKPLACES_URL)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_create_workplace_with_working_hours_persists_schedule(self):
+        schedule = [
+            {'weekday': i, 'start_time': '08:00:00', 'end_time': '14:00:00', 'is_active': True}
+            for i in range(3)
+        ]
+        res = self.client.post(
+            WORKPLACES_URL, workplace_payload(working_hours=schedule), format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        wp = Workplace.objects.get(pk=res.data['id'])
+        self.assertEqual(WorkingHours.objects.filter(workplace=wp).count(), 7)
+        monday = WorkingHours.objects.get(workplace=wp, weekday=0)
+        self.assertTrue(monday.is_active)
+        self.assertEqual(str(monday.start_time), '08:00:00')
+        thursday = WorkingHours.objects.get(workplace=wp, weekday=3)
+        self.assertFalse(thursday.is_active)
+        self.assertEqual(len(res.data['working_hours']), 7)
+
+    def test_create_workplace_without_working_hours_creates_no_rows(self):
+        res = self.client.post(WORKPLACES_URL, workplace_payload(), format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        wp = Workplace.objects.get(pk=res.data['id'])
+        self.assertEqual(WorkingHours.objects.filter(workplace=wp).count(), 0)
+
+    def test_create_workplace_with_invalid_hours_range_creates_no_workplace(self):
+        schedule = [{'weekday': 0, 'start_time': '17:00', 'end_time': '09:00', 'is_active': True}]
+        res = self.client.post(
+            WORKPLACES_URL, workplace_payload(working_hours=schedule), format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Workplace.objects.filter(doctor=self.doctor).exists())
+
+    def test_patch_workplace_with_working_hours_replaces_schedule(self):
+        wp = Workplace.objects.create(doctor=self.doctor, **workplace_payload())
+        WorkingHours.objects.create(
+            workplace=wp, weekday=0, start_time='09:00', end_time='17:00', is_active=True
+        )
+        schedule = [
+            {'weekday': 1, 'start_time': '10:00:00', 'end_time': '12:00:00', 'is_active': True}
+        ]
+        res = self.client.patch(
+            f'{WORKPLACES_URL}{wp.pk}/', {'working_hours': schedule}, format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(WorkingHours.objects.filter(workplace=wp).count(), 7)
+        self.assertFalse(WorkingHours.objects.get(workplace=wp, weekday=0).is_active)
+        self.assertTrue(WorkingHours.objects.get(workplace=wp, weekday=1).is_active)
+
+    def test_patch_workplace_without_working_hours_leaves_hours_untouched(self):
+        wp = Workplace.objects.create(doctor=self.doctor, **workplace_payload())
+        WorkingHours.objects.create(
+            workplace=wp, weekday=0, start_time='09:00', end_time='17:00', is_active=True
+        )
+        res = self.client.patch(f'{WORKPLACES_URL}{wp.pk}/', {'name': 'Renamed'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(WorkingHours.objects.filter(workplace=wp).count(), 1)
+        self.assertTrue(WorkingHours.objects.get(workplace=wp, weekday=0).is_active)
+
     def test_doctor_cannot_patch_other_doctors_workplace(self):
         cache.clear()
         self.client.credentials()
