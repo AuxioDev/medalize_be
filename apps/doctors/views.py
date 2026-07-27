@@ -142,7 +142,9 @@ class WorkplaceListCreateView(APIView):
             .filter(doctor=request.user)
             .prefetch_related('working_hours')
         )
-        return Response(WorkplaceSerializer(workplaces, many=True).data)
+        return Response(
+            WorkplaceSerializer(workplaces, many=True, context={'request': request}).data
+        )
 
     def post(self, request):
         serializer = WorkplaceSerializer(data=request.data)
@@ -159,7 +161,10 @@ class WorkplaceListCreateView(APIView):
         if items is not None:
             _invalidate_doctor_slots(request.user.id)
 
-        return Response(WorkplaceSerializer(workplace).data, status=status.HTTP_201_CREATED)
+        return Response(
+            WorkplaceSerializer(workplace, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class WorkplaceDetailView(APIView):
@@ -181,7 +186,7 @@ class WorkplaceDetailView(APIView):
         if items is not None:
             _invalidate_doctor_slots(request.user.id)
 
-        return Response(WorkplaceSerializer(workplace).data)
+        return Response(WorkplaceSerializer(workplace, context={'request': request}).data)
 
     def delete(self, request, pk):
         workplace = _get_workplace(pk, request.user)
@@ -215,7 +220,7 @@ class WorkplaceSetPrimaryView(APIView):
             Workplace.objects.filter(doctor=request.user).update(is_primary=False)
             workplace.is_primary = True
             workplace.save(update_fields=['is_primary'])
-        return Response(WorkplaceSerializer(workplace).data)
+        return Response(WorkplaceSerializer(workplace, context={'request': request}).data)
 
 
 class WorkingHoursView(APIView):

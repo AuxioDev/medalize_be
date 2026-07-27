@@ -396,14 +396,14 @@ class PatientProfileView(APIView):
 
     def get(self, request):
         profile, _ = PatientProfile.objects.get_or_create(user=request.user)
-        return Response(PatientProfileSerializer(profile).data)
+        return Response(PatientProfileSerializer(profile, context={'request': request}).data)
 
     def patch(self, request):
         profile, _ = PatientProfile.objects.get_or_create(user=request.user)
         serializer = PatientProfileSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(PatientProfileSerializer(profile).data)
+        return Response(PatientProfileSerializer(profile, context={'request': request}).data)
 
 
 class PasswordChangeView(APIView):

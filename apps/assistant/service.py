@@ -15,6 +15,7 @@ Chat flow per user message (``handle_user_message``):
 from django.db.models import Avg, Count, F
 from rapidfuzz import fuzz
 
+from apps.core.i18n import city_label, resolve_city_key
 from apps.notifications.i18n import recipient_language
 from apps.users.i18n import specialization_label
 
@@ -126,7 +127,8 @@ def search_doctors(specialization, city=None, lang='en'):
         )
     )
     if city:
-        qs = qs.filter(workplaces__city__icontains=city).distinct()
+        city_key = resolve_city_key(city)
+        qs = qs.filter(workplaces__city=city_key).distinct() if city_key else qs.none()
     qs = qs.order_by(F('avg_rating').desc(nulls_last=True), 'first_name', 'last_name')[:5]
 
     results = []
@@ -146,6 +148,7 @@ def search_doctors(specialization, city=None, lang='en'):
             ),
             'total_reviews': doctor.total_reviews,
             'city': primary.city if primary else '',
+            'city_display': city_label(primary.city, lang) if primary else '',
         })
     return results
 

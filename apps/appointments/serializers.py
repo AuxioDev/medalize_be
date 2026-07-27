@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.core.i18n import city_label, region_label
 from apps.doctors.models import BlockedPeriod, WorkingHours, Workplace
 from apps.family.serializers import DependentBriefSerializer
 from apps.family.services import resolve_dependent
@@ -49,6 +50,15 @@ class WorkplaceBriefSerializer(serializers.Serializer):
     name = serializers.CharField()
     address = serializers.CharField()
     city = serializers.CharField()
+    city_display = serializers.SerializerMethodField()
+    region = serializers.CharField()
+    region_display = serializers.SerializerMethodField()
+
+    def get_city_display(self, obj):
+        return city_label(obj.city, viewer_language(self.context))
+
+    def get_region_display(self, obj):
+        return region_label(obj.region, viewer_language(self.context)) if obj.region else ''
 
 
 class AppointmentSerializer(serializers.ModelSerializer):
@@ -359,7 +369,16 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
         if not workplaces:
             return None
         wp = next((w for w in workplaces if w.is_primary), workplaces[0])
-        return {'id': str(wp.id), 'name': wp.name, 'city': wp.city, 'address': wp.address}
+        lang = viewer_language(self.context)
+        return {
+            'id': str(wp.id),
+            'name': wp.name,
+            'address': wp.address,
+            'city': wp.city,
+            'city_display': city_label(wp.city, lang),
+            'region': wp.region,
+            'region_display': region_label(wp.region, lang) if wp.region else '',
+        }
 
     def get_average_rating(self, obj):
         if hasattr(obj, 'avg_rating'):
@@ -417,5 +436,5 @@ class DoctorDetailSerializer(DoctorPublicSerializer):
     def get_workplaces(self, obj):
         from apps.doctors.serializers import WorkplaceSerializer
         return WorkplaceSerializer(
-            obj.workplaces.prefetch_related('working_hours'), many=True
+            obj.workplaces.prefetch_related('working_hours'), many=True, context=self.context
         ).data

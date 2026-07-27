@@ -182,7 +182,7 @@ class LocalizedSpecializationDisplayTests(APITestCase):
 
     def test_appointment_serializer_uses_viewing_patients_language(self):
         workplace = Workplace.objects.create(
-            doctor=self.doctor, name='Clinic', address='1 St', city='Baku', type='clinic',
+            doctor=self.doctor, name='Clinic', address='1 St', city='baku', type='clinic',
         )
         starts = timezone.now() + datetime.timedelta(days=3)
         appt = Appointment.objects.create(
@@ -193,6 +193,37 @@ class LocalizedSpecializationDisplayTests(APITestCase):
         res = self.client.get(f'/api/appointments/{appt.id}/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data['doctor']['specialization_display'], 'Кардиология')
+        self.assertEqual(res.data['workplace']['city_display'], 'Баку')
+
+
+class PatientProfileLocationTests(APITestCase):
+    PATIENT_PROFILE_URL = '/api/auth/profile/patient/'
+
+    def setUp(self):
+        cache.clear()
+        self.patient = User.objects.create_user(
+            email='patient@test.com', password='Pass1234', role='patient',
+            first_name='Jane', last_name='Doe', language='ru',
+        )
+        self.client.force_authenticate(self.patient)
+
+    def test_patch_city_derives_region_and_localized_display(self):
+        res = self.client.patch(self.PATIENT_PROFILE_URL, {'city': 'ganja'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['city'], 'ganja')
+        self.assertEqual(res.data['region'], 'ganja_dashkasan')
+        self.assertEqual(res.data['city_display'], 'Гянджа')
+        self.assertEqual(res.data['region_display'], 'Гянджа-Дашкесан')
+
+    def test_patch_rejects_unknown_city(self):
+        res = self.client.patch(self.PATIENT_PROFILE_URL, {'city': 'atlantis'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_blank_city_has_blank_display(self):
+        res = self.client.get(self.PATIENT_PROFILE_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['city'], '')
+        self.assertEqual(res.data['city_display'], '')
 
 
 class LocalizedNotificationTests(APITestCase):
@@ -207,7 +238,7 @@ class LocalizedNotificationTests(APITestCase):
             first_name='Jane', last_name='Doe', language='ru',
         )
         self.workplace = Workplace.objects.create(
-            doctor=self.doctor, name='Clinic', address='1 St', city='Baku', type='clinic',
+            doctor=self.doctor, name='Clinic', address='1 St', city='baku', type='clinic',
         )
         starts = timezone.now() + datetime.timedelta(days=3)
         self.appointment = Appointment.objects.create(

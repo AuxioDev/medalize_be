@@ -1,0 +1,1155 @@
+{
+  "baku": {
+    "region": "baku",
+    "type": "city",
+    "lat": 40.4093,
+    "lng": 49.8671,
+    "names": {
+      "en": "Baku",
+      "az": "Bakı",
+      "ru": "Баку",
+      "tr": "Bakü",
+      "fr": "Bakou",
+      "zh": "巴库"
+    },
+    "aliases": [
+      "baki"
+    ]
+  },
+  "absheron": {
+    "region": "absheron_khizi",
+    "type": "district",
+    "lat": 40.4517,
+    "lng": 49.7422,
+    "names": {
+      "en": "Absheron",
+      "az": "Abşeron",
+      "ru": "Абшерон",
+      "tr": "Abşeron",
+      "fr": "Absheron",
+      "zh": "Absheron"
+    },
+    "aliases": []
+  },
+  "khizi": {
+    "region": "absheron_khizi",
+    "type": "district",
+    "lat": 40.9021,
+    "lng": 49.077,
+    "names": {
+      "en": "Khizi",
+      "az": "Xızı",
+      "ru": "Хызы",
+      "tr": "Hızı",
+      "fr": "Khizi",
+      "zh": "Khizi"
+    },
+    "aliases": []
+  },
+  "sumgait": {
+    "region": "absheron_khizi",
+    "type": "city",
+    "lat": 40.5892,
+    "lng": 49.6686,
+    "names": {
+      "en": "Sumgait",
+      "az": "Sumqayıt",
+      "ru": "Сумгайыт",
+      "tr": "Sumgayıt",
+      "fr": "Soumgaït",
+      "zh": "苏姆盖特"
+    },
+    "aliases": [
+      "sumqayit",
+      "sumgayit"
+    ]
+  },
+  "dashkasan": {
+    "region": "ganja_dashkasan",
+    "type": "district",
+    "lat": 40.5175,
+    "lng": 46.0733,
+    "names": {
+      "en": "Dashkasan",
+      "az": "Daşkəsən",
+      "ru": "Дашкесан",
+      "tr": "Daşkesen",
+      "fr": "Dashkasan",
+      "zh": "Dashkasan"
+    },
+    "aliases": []
+  },
+  "goranboy": {
+    "region": "ganja_dashkasan",
+    "type": "district",
+    "lat": 40.6103,
+    "lng": 46.7847,
+    "names": {
+      "en": "Goranboy",
+      "az": "Goranboy",
+      "ru": "Горанбой",
+      "tr": "Goranboy",
+      "fr": "Goranboy",
+      "zh": "Goranboy"
+    },
+    "aliases": []
+  },
+  "goygol": {
+    "region": "ganja_dashkasan",
+    "type": "district",
+    "lat": 40.5975,
+    "lng": 46.3181,
+    "names": {
+      "en": "Goygol",
+      "az": "Göygöl",
+      "ru": "Гёйгёль",
+      "tr": "Göygöl",
+      "fr": "Goygol",
+      "zh": "Goygol"
+    },
+    "aliases": []
+  },
+  "samukh": {
+    "region": "ganja_dashkasan",
+    "type": "district",
+    "lat": 40.7847,
+    "lng": 46.4442,
+    "names": {
+      "en": "Samukh",
+      "az": "Samux",
+      "ru": "Самух",
+      "tr": "Samuh",
+      "fr": "Samukh",
+      "zh": "Samukh"
+    },
+    "aliases": []
+  },
+  "ganja": {
+    "region": "ganja_dashkasan",
+    "type": "city",
+    "lat": 40.6828,
+    "lng": 46.3606,
+    "names": {
+      "en": "Ganja",
+      "az": "Gəncə",
+      "ru": "Гянджа",
+      "tr": "Gence",
+      "fr": "Gandja",
+      "zh": "占贾"
+    },
+    "aliases": [
+      "gyanja",
+      "gyandzha"
+    ]
+  },
+  "naftalan": {
+    "region": "ganja_dashkasan",
+    "type": "city",
+    "lat": 40.5089,
+    "lng": 46.8175,
+    "names": {
+      "en": "Naftalan",
+      "az": "Naftalan",
+      "ru": "Нафталан",
+      "tr": "Naftalan",
+      "fr": "Naftalan",
+      "zh": "纳夫塔兰"
+    },
+    "aliases": []
+  },
+  "balakan": {
+    "region": "shaki_zagatala",
+    "type": "district",
+    "lat": 41.7256,
+    "lng": 46.4056,
+    "names": {
+      "en": "Balakan",
+      "az": "Balakən",
+      "ru": "Балакен",
+      "tr": "Balaken",
+      "fr": "Balakan",
+      "zh": "Balakan"
+    },
+    "aliases": []
+  },
+  "zaqatala": {
+    "region": "shaki_zagatala",
+    "type": "district",
+    "lat": 41.6303,
+    "lng": 46.6367,
+    "names": {
+      "en": "Zaqatala",
+      "az": "Zaqatala",
+      "ru": "Загатала",
+      "tr": "Zakatala",
+      "fr": "Zaqatala",
+      "zh": "Zaqatala"
+    },
+    "aliases": []
+  },
+  "qakh": {
+    "region": "shaki_zagatala",
+    "type": "district",
+    "lat": 41.4258,
+    "lng": 46.935,
+    "names": {
+      "en": "Qakh",
+      "az": "Qax",
+      "ru": "Гах",
+      "tr": "Gah",
+      "fr": "Qakh",
+      "zh": "Qakh"
+    },
+    "aliases": [
+      "gakh"
+    ]
+  },
+  "oghuz": {
+    "region": "shaki_zagatala",
+    "type": "district",
+    "lat": 41.0742,
+    "lng": 47.455,
+    "names": {
+      "en": "Oghuz",
+      "az": "Oğuz",
+      "ru": "Огуз",
+      "tr": "Oğuz",
+      "fr": "Oghuz",
+      "zh": "Oghuz"
+    },
+    "aliases": []
+  },
+  "qabala": {
+    "region": "shaki_zagatala",
+    "type": "district",
+    "lat": 40.9797,
+    "lng": 47.8467,
+    "names": {
+      "en": "Qabala",
+      "az": "Qəbələ",
+      "ru": "Габала",
+      "tr": "Gabala",
+      "fr": "Qabala",
+      "zh": "Qabala"
+    },
+    "aliases": [
+      "gabala"
+    ]
+  },
+  "shaki": {
+    "region": "shaki_zagatala",
+    "type": "city",
+    "lat": 41.1919,
+    "lng": 47.1706,
+    "names": {
+      "en": "Shaki",
+      "az": "Şəki",
+      "ru": "Шеки",
+      "tr": "Şeki",
+      "fr": "Shaki",
+      "zh": "舍基"
+    },
+    "aliases": [
+      "sheki"
+    ]
+  },
+  "astara": {
+    "region": "lankaran_astara",
+    "type": "district",
+    "lat": 38.4531,
+    "lng": 48.8656,
+    "names": {
+      "en": "Astara",
+      "az": "Astara",
+      "ru": "Астара",
+      "tr": "Astara",
+      "fr": "Astara",
+      "zh": "Astara"
+    },
+    "aliases": []
+  },
+  "jalilabad": {
+    "region": "lankaran_astara",
+    "type": "district",
+    "lat": 39.2039,
+    "lng": 48.4922,
+    "names": {
+      "en": "Jalilabad",
+      "az": "Cəlilabad",
+      "ru": "Джалилабад",
+      "tr": "Celilabad",
+      "fr": "Jalilabad",
+      "zh": "Jalilabad"
+    },
+    "aliases": []
+  },
+  "lerik": {
+    "region": "lankaran_astara",
+    "type": "district",
+    "lat": 38.7756,
+    "lng": 48.4181,
+    "names": {
+      "en": "Lerik",
+      "az": "Lerik",
+      "ru": "Лерик",
+      "tr": "Lerik",
+      "fr": "Lerik",
+      "zh": "Lerik"
+    },
+    "aliases": []
+  },
+  "masally": {
+    "region": "lankaran_astara",
+    "type": "district",
+    "lat": 39.0328,
+    "lng": 48.6633,
+    "names": {
+      "en": "Masally",
+      "az": "Masallı",
+      "ru": "Масаллы",
+      "tr": "Masallı",
+      "fr": "Masally",
+      "zh": "Masally"
+    },
+    "aliases": []
+  },
+  "yardimli": {
+    "region": "lankaran_astara",
+    "type": "district",
+    "lat": 38.9186,
+    "lng": 48.2447,
+    "names": {
+      "en": "Yardimli",
+      "az": "Yardımlı",
+      "ru": "Ярдымлы",
+      "tr": "Yardımlı",
+      "fr": "Yardimli",
+      "zh": "Yardimli"
+    },
+    "aliases": []
+  },
+  "lankaran": {
+    "region": "lankaran_astara",
+    "type": "city",
+    "lat": 38.7537,
+    "lng": 48.8511,
+    "names": {
+      "en": "Lankaran",
+      "az": "Lənkəran",
+      "ru": "Ленкорань",
+      "tr": "Lenkeran",
+      "fr": "Lankaran",
+      "zh": "连科兰"
+    },
+    "aliases": [
+      "lenkoran"
+    ]
+  },
+  "shabran": {
+    "region": "guba_khachmaz",
+    "type": "district",
+    "lat": 41.2306,
+    "lng": 48.9639,
+    "names": {
+      "en": "Shabran",
+      "az": "Şabran",
+      "ru": "Шабран",
+      "tr": "Şabran",
+      "fr": "Shabran",
+      "zh": "Shabran"
+    },
+    "aliases": [
+      "devechi"
+    ]
+  },
+  "khachmaz": {
+    "region": "guba_khachmaz",
+    "type": "district",
+    "lat": 41.4636,
+    "lng": 48.8006,
+    "names": {
+      "en": "Khachmaz",
+      "az": "Xaçmaz",
+      "ru": "Хачмаз",
+      "tr": "Hacmaz",
+      "fr": "Khachmaz",
+      "zh": "Khachmaz"
+    },
+    "aliases": []
+  },
+  "quba": {
+    "region": "guba_khachmaz",
+    "type": "district",
+    "lat": 41.3606,
+    "lng": 48.5119,
+    "names": {
+      "en": "Quba",
+      "az": "Quba",
+      "ru": "Куба",
+      "tr": "Guba",
+      "fr": "Quba",
+      "zh": "Quba"
+    },
+    "aliases": [
+      "guba"
+    ]
+  },
+  "qusar": {
+    "region": "guba_khachmaz",
+    "type": "district",
+    "lat": 41.4272,
+    "lng": 48.4322,
+    "names": {
+      "en": "Qusar",
+      "az": "Qusar",
+      "ru": "Гусар",
+      "tr": "Kusar",
+      "fr": "Qusar",
+      "zh": "Qusar"
+    },
+    "aliases": []
+  },
+  "siyazan": {
+    "region": "guba_khachmaz",
+    "type": "district",
+    "lat": 41.0669,
+    "lng": 49.1094,
+    "names": {
+      "en": "Siyazan",
+      "az": "Siyəzən",
+      "ru": "Сиязань",
+      "tr": "Siyezen",
+      "fr": "Siyazan",
+      "zh": "Siyazan"
+    },
+    "aliases": []
+  },
+  "agdash": {
+    "region": "central_aran",
+    "type": "district",
+    "lat": 40.6467,
+    "lng": 47.4692,
+    "names": {
+      "en": "Agdash",
+      "az": "Ağdaş",
+      "ru": "Агдаш",
+      "tr": "Ağdaş",
+      "fr": "Agdash",
+      "zh": "Agdash"
+    },
+    "aliases": []
+  },
+  "goychay": {
+    "region": "central_aran",
+    "type": "district",
+    "lat": 40.6558,
+    "lng": 47.7397,
+    "names": {
+      "en": "Goychay",
+      "az": "Göyçay",
+      "ru": "Гёйчай",
+      "tr": "Göyçay",
+      "fr": "Goychay",
+      "zh": "Goychay"
+    },
+    "aliases": []
+  },
+  "kurdamir": {
+    "region": "central_aran",
+    "type": "district",
+    "lat": 40.3389,
+    "lng": 48.1583,
+    "names": {
+      "en": "Kurdamir",
+      "az": "Kürdəmir",
+      "ru": "Кюрдамир",
+      "tr": "Kürdemir",
+      "fr": "Kurdamir",
+      "zh": "Kurdamir"
+    },
+    "aliases": []
+  },
+  "ujar": {
+    "region": "central_aran",
+    "type": "district",
+    "lat": 40.5222,
+    "lng": 47.6489,
+    "names": {
+      "en": "Ujar",
+      "az": "Ucar",
+      "ru": "Уджар",
+      "tr": "Ucar",
+      "fr": "Ujar",
+      "zh": "Ujar"
+    },
+    "aliases": []
+  },
+  "zardab": {
+    "region": "central_aran",
+    "type": "district",
+    "lat": 40.3567,
+    "lng": 47.7092,
+    "names": {
+      "en": "Zardab",
+      "az": "Zərdab",
+      "ru": "Зардаб",
+      "tr": "Zerdab",
+      "fr": "Zardab",
+      "zh": "Zardab"
+    },
+    "aliases": []
+  },
+  "yevlakh": {
+    "region": "central_aran",
+    "type": "city",
+    "lat": 40.6167,
+    "lng": 47.15,
+    "names": {
+      "en": "Yevlakh",
+      "az": "Yevlax",
+      "ru": "Евлах",
+      "tr": "Yevlah",
+      "fr": "Yevlakh",
+      "zh": "叶夫拉赫"
+    },
+    "aliases": []
+  },
+  "mingachevir": {
+    "region": "central_aran",
+    "type": "city",
+    "lat": 40.7699,
+    "lng": 47.0492,
+    "names": {
+      "en": "Mingachevir",
+      "az": "Mingəçevir",
+      "ru": "Мингечевир",
+      "tr": "Mingeçevir",
+      "fr": "Mingatchévir",
+      "zh": "明盖切维尔"
+    },
+    "aliases": [
+      "mingechaur"
+    ]
+  },
+  "aghjabadi": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 40.0567,
+    "lng": 47.4489,
+    "names": {
+      "en": "Aghjabadi",
+      "az": "Ağcabədi",
+      "ru": "Агджабеди",
+      "tr": "Ağcabedi",
+      "fr": "Aghjabadi",
+      "zh": "Aghjabadi"
+    },
+    "aliases": []
+  },
+  "aghdam": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 39.9908,
+    "lng": 46.935,
+    "names": {
+      "en": "Aghdam",
+      "az": "Ağdam",
+      "ru": "Агдам",
+      "tr": "Ağdam",
+      "fr": "Aghdam",
+      "zh": "阿格达姆"
+    },
+    "aliases": []
+  },
+  "aghdara": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 40.0906,
+    "lng": 46.8825,
+    "names": {
+      "en": "Aghdara",
+      "az": "Ağdərə",
+      "ru": "Агдере",
+      "tr": "Ağdere",
+      "fr": "Aghdara",
+      "zh": "阿格达拉"
+    },
+    "aliases": []
+  },
+  "barda": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 40.3778,
+    "lng": 47.1225,
+    "names": {
+      "en": "Barda",
+      "az": "Bərdə",
+      "ru": "Барда",
+      "tr": "Berde",
+      "fr": "Barda",
+      "zh": "Barda"
+    },
+    "aliases": []
+  },
+  "fuzuli": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 39.6003,
+    "lng": 47.1444,
+    "names": {
+      "en": "Fuzuli",
+      "az": "Füzuli",
+      "ru": "Физули",
+      "tr": "Fuzuli",
+      "fr": "Fuzuli",
+      "zh": "Fuzuli"
+    },
+    "aliases": []
+  },
+  "khojaly": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 39.9086,
+    "lng": 46.79,
+    "names": {
+      "en": "Khojaly",
+      "az": "Xocalı",
+      "ru": "Ходжалы",
+      "tr": "Hocalı",
+      "fr": "Khojaly",
+      "zh": "霍贾雷"
+    },
+    "aliases": []
+  },
+  "khojavend": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 39.7461,
+    "lng": 47.0658,
+    "names": {
+      "en": "Khojavend",
+      "az": "Xocavənd",
+      "ru": "Ходжавенд",
+      "tr": "Hocavend",
+      "fr": "Khojavend",
+      "zh": "霍贾文德"
+    },
+    "aliases": []
+  },
+  "shusha": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 39.7597,
+    "lng": 46.7486,
+    "names": {
+      "en": "Shusha",
+      "az": "Şuşa",
+      "ru": "Шуша",
+      "tr": "Şuşa",
+      "fr": "Choucha",
+      "zh": "舒沙"
+    },
+    "aliases": []
+  },
+  "tartar": {
+    "region": "karabakh",
+    "type": "district",
+    "lat": 40.3439,
+    "lng": 46.9314,
+    "names": {
+      "en": "Tartar",
+      "az": "Tərtər",
+      "ru": "Тертер",
+      "tr": "Terter",
+      "fr": "Tartar",
+      "zh": "Tartar"
+    },
+    "aliases": []
+  },
+  "khankendi": {
+    "region": "karabakh",
+    "type": "city",
+    "lat": 39.8288,
+    "lng": 46.7661,
+    "names": {
+      "en": "Khankendi",
+      "az": "Xankəndi",
+      "ru": "Ханкенди",
+      "tr": "Hankendi",
+      "fr": "Khankendi",
+      "zh": "汉肯德"
+    },
+    "aliases": [
+      "stepanakert"
+    ]
+  },
+  "kalbajar": {
+    "region": "east_zangezur",
+    "type": "district",
+    "lat": 40.1064,
+    "lng": 46.0392,
+    "names": {
+      "en": "Kalbajar",
+      "az": "Kəlbəcər",
+      "ru": "Кяльбаджар",
+      "tr": "Kelbecer",
+      "fr": "Kalbajar",
+      "zh": "克尔巴贾尔"
+    },
+    "aliases": []
+  },
+  "lachin": {
+    "region": "east_zangezur",
+    "type": "district",
+    "lat": 39.635,
+    "lng": 46.5486,
+    "names": {
+      "en": "Lachin",
+      "az": "Laçın",
+      "ru": "Лачин",
+      "tr": "Laçın",
+      "fr": "Lachin",
+      "zh": "拉钦"
+    },
+    "aliases": []
+  },
+  "qubadli": {
+    "region": "east_zangezur",
+    "type": "district",
+    "lat": 39.3389,
+    "lng": 46.5719,
+    "names": {
+      "en": "Qubadli",
+      "az": "Qubadlı",
+      "ru": "Кубатлы",
+      "tr": "Gubadlı",
+      "fr": "Qubadli",
+      "zh": "Qubadli"
+    },
+    "aliases": []
+  },
+  "zangilan": {
+    "region": "east_zangezur",
+    "type": "district",
+    "lat": 39.0894,
+    "lng": 46.6494,
+    "names": {
+      "en": "Zangilan",
+      "az": "Zəngilan",
+      "ru": "Зангилан",
+      "tr": "Zengilan",
+      "fr": "Zangilan",
+      "zh": "赞格兰"
+    },
+    "aliases": []
+  },
+  "jabrayil": {
+    "region": "east_zangezur",
+    "type": "district",
+    "lat": 39.3986,
+    "lng": 47.0142,
+    "names": {
+      "en": "Jabrayil",
+      "az": "Cəbrayıl",
+      "ru": "Джебраил",
+      "tr": "Cebrayıl",
+      "fr": "Jabrayil",
+      "zh": "Jabrayil"
+    },
+    "aliases": []
+  },
+  "agsu": {
+    "region": "mountainous_shirvan",
+    "type": "district",
+    "lat": 40.3956,
+    "lng": 48.4233,
+    "names": {
+      "en": "Agsu",
+      "az": "Ağsu",
+      "ru": "Агсу",
+      "tr": "Ağsu",
+      "fr": "Agsu",
+      "zh": "Agsu"
+    },
+    "aliases": []
+  },
+  "ismayilli": {
+    "region": "mountainous_shirvan",
+    "type": "district",
+    "lat": 40.7828,
+    "lng": 48.1547,
+    "names": {
+      "en": "Ismayilli",
+      "az": "İsmayıllı",
+      "ru": "Исмаиллы",
+      "tr": "İsmayıllı",
+      "fr": "Ismayilli",
+      "zh": "Ismayilli"
+    },
+    "aliases": []
+  },
+  "gobustan": {
+    "region": "mountainous_shirvan",
+    "type": "district",
+    "lat": 40.5225,
+    "lng": 48.9494,
+    "names": {
+      "en": "Gobustan",
+      "az": "Qobustan",
+      "ru": "Гобустан",
+      "tr": "Gobustan",
+      "fr": "Gobustan",
+      "zh": "Gobustan"
+    },
+    "aliases": []
+  },
+  "shamakhi": {
+    "region": "mountainous_shirvan",
+    "type": "district",
+    "lat": 40.6303,
+    "lng": 48.6389,
+    "names": {
+      "en": "Shamakhi",
+      "az": "Şamaxı",
+      "ru": "Шемаха",
+      "tr": "Şamahı",
+      "fr": "Shamakhi",
+      "zh": "Shamakhi"
+    },
+    "aliases": []
+  },
+  "babek": {
+    "region": "nakhchivan",
+    "type": "district",
+    "lat": 39.1667,
+    "lng": 45.2833,
+    "names": {
+      "en": "Babek",
+      "az": "Babək",
+      "ru": "Бабек",
+      "tr": "Babek",
+      "fr": "Babek",
+      "zh": "Babek"
+    },
+    "aliases": []
+  },
+  "julfa": {
+    "region": "nakhchivan",
+    "type": "district",
+    "lat": 38.9606,
+    "lng": 45.63,
+    "names": {
+      "en": "Julfa",
+      "az": "Culfa",
+      "ru": "Джульфа",
+      "tr": "Culfa",
+      "fr": "Julfa",
+      "zh": "Julfa"
+    },
+    "aliases": []
+  },
+  "kangarli": {
+    "region": "nakhchivan",
+    "type": "district",
+    "lat": 39.6469,
+    "lng": 45.05,
+    "names": {
+      "en": "Kangarli",
+      "az": "Kəngərli",
+      "ru": "Кенгерли",
+      "tr": "Kengerli",
+      "fr": "Kangarli",
+      "zh": "Kangarli"
+    },
+    "aliases": []
+  },
+  "ordubad": {
+    "region": "nakhchivan",
+    "type": "district",
+    "lat": 38.9086,
+    "lng": 46.0247,
+    "names": {
+      "en": "Ordubad",
+      "az": "Ordubad",
+      "ru": "Ордубад",
+      "tr": "Ordubad",
+      "fr": "Ordubad",
+      "zh": "Ordubad"
+    },
+    "aliases": []
+  },
+  "sadarak": {
+    "region": "nakhchivan",
+    "type": "district",
+    "lat": 39.7139,
+    "lng": 44.8617,
+    "names": {
+      "en": "Sadarak",
+      "az": "Sədərək",
+      "ru": "Садарак",
+      "tr": "Sederek",
+      "fr": "Sadarak",
+      "zh": "Sadarak"
+    },
+    "aliases": []
+  },
+  "shahbuz": {
+    "region": "nakhchivan",
+    "type": "district",
+    "lat": 39.4256,
+    "lng": 45.6197,
+    "names": {
+      "en": "Shahbuz",
+      "az": "Şahbuz",
+      "ru": "Шахбуз",
+      "tr": "Şahbuz",
+      "fr": "Shahbuz",
+      "zh": "Shahbuz"
+    },
+    "aliases": []
+  },
+  "sharur": {
+    "region": "nakhchivan",
+    "type": "district",
+    "lat": 39.5561,
+    "lng": 44.9439,
+    "names": {
+      "en": "Sharur",
+      "az": "Şərur",
+      "ru": "Шарур",
+      "tr": "Şerur",
+      "fr": "Sharur",
+      "zh": "Sharur"
+    },
+    "aliases": []
+  },
+  "nakhchivan_city": {
+    "region": "nakhchivan",
+    "type": "city",
+    "lat": 39.2089,
+    "lng": 45.4122,
+    "names": {
+      "en": "Nakhchivan",
+      "az": "Naxçıvan",
+      "ru": "Нахчыван",
+      "tr": "Nahçıvan",
+      "fr": "Nakhitchevan",
+      "zh": "纳希切万"
+    },
+    "aliases": [
+      "nakhichevan"
+    ]
+  },
+  "aghstafa": {
+    "region": "qazakh_tovuz",
+    "type": "district",
+    "lat": 41.1131,
+    "lng": 45.4547,
+    "names": {
+      "en": "Aghstafa",
+      "az": "Ağstafa",
+      "ru": "Агстафа",
+      "tr": "Ağstafa",
+      "fr": "Aghstafa",
+      "zh": "Aghstafa"
+    },
+    "aliases": []
+  },
+  "gadabay": {
+    "region": "qazakh_tovuz",
+    "type": "district",
+    "lat": 40.5589,
+    "lng": 45.8158,
+    "names": {
+      "en": "Gadabay",
+      "az": "Gədəbəy",
+      "ru": "Гядабей",
+      "tr": "Gedebey",
+      "fr": "Gadabay",
+      "zh": "Gadabay"
+    },
+    "aliases": []
+  },
+  "qazakh": {
+    "region": "qazakh_tovuz",
+    "type": "district",
+    "lat": 41.0972,
+    "lng": 45.3644,
+    "names": {
+      "en": "Qazakh",
+      "az": "Qazax",
+      "ru": "Казах",
+      "tr": "Gazah",
+      "fr": "Qazakh",
+      "zh": "Qazakh"
+    },
+    "aliases": [
+      "gazakh"
+    ]
+  },
+  "shamkir": {
+    "region": "qazakh_tovuz",
+    "type": "district",
+    "lat": 40.8306,
+    "lng": 46.0186,
+    "names": {
+      "en": "Shamkir",
+      "az": "Şəmkir",
+      "ru": "Шамкир",
+      "tr": "Şemkir",
+      "fr": "Shamkir",
+      "zh": "Shamkir"
+    },
+    "aliases": []
+  },
+  "tovuz": {
+    "region": "qazakh_tovuz",
+    "type": "district",
+    "lat": 40.9928,
+    "lng": 45.6272,
+    "names": {
+      "en": "Tovuz",
+      "az": "Tovuz",
+      "ru": "Товуз",
+      "tr": "Tovuz",
+      "fr": "Tovuz",
+      "zh": "Tovuz"
+    },
+    "aliases": []
+  },
+  "beylagan": {
+    "region": "mil_mughan",
+    "type": "district",
+    "lat": 39.7719,
+    "lng": 47.6006,
+    "names": {
+      "en": "Beylagan",
+      "az": "Beyləqan",
+      "ru": "Бейлаган",
+      "tr": "Beyleqan",
+      "fr": "Beylagan",
+      "zh": "Beylagan"
+    },
+    "aliases": []
+  },
+  "imishli": {
+    "region": "mil_mughan",
+    "type": "district",
+    "lat": 39.8697,
+    "lng": 48.0644,
+    "names": {
+      "en": "Imishli",
+      "az": "İmişli",
+      "ru": "Имишли",
+      "tr": "İmişli",
+      "fr": "Imishli",
+      "zh": "Imishli"
+    },
+    "aliases": []
+  },
+  "saatly": {
+    "region": "mil_mughan",
+    "type": "district",
+    "lat": 39.9339,
+    "lng": 48.3703,
+    "names": {
+      "en": "Saatly",
+      "az": "Saatlı",
+      "ru": "Саатлы",
+      "tr": "Saatlı",
+      "fr": "Saatly",
+      "zh": "Saatly"
+    },
+    "aliases": []
+  },
+  "sabirabad": {
+    "region": "mil_mughan",
+    "type": "district",
+    "lat": 40.0967,
+    "lng": 48.4711,
+    "names": {
+      "en": "Sabirabad",
+      "az": "Sabirabad",
+      "ru": "Сабирабад",
+      "tr": "Sabirabad",
+      "fr": "Sabirabad",
+      "zh": "Sabirabad"
+    },
+    "aliases": []
+  },
+  "bilasuvar": {
+    "region": "shirvan_salyan",
+    "type": "district",
+    "lat": 39.4544,
+    "lng": 48.5461,
+    "names": {
+      "en": "Bilasuvar",
+      "az": "Biləsuvar",
+      "ru": "Билясувар",
+      "tr": "Bilesuvar",
+      "fr": "Bilasuvar",
+      "zh": "Bilasuvar"
+    },
+    "aliases": []
+  },
+  "hajigabul": {
+    "region": "shirvan_salyan",
+    "type": "district",
+    "lat": 40.0453,
+    "lng": 48.9214,
+    "names": {
+      "en": "Hajigabul",
+      "az": "Hacıqabul",
+      "ru": "Гаджигабул",
+      "tr": "Hacıqabul",
+      "fr": "Hajigabul",
+      "zh": "Hajigabul"
+    },
+    "aliases": []
+  },
+  "neftchala": {
+    "region": "shirvan_salyan",
+    "type": "district",
+    "lat": 39.3822,
+    "lng": 49.2444,
+    "names": {
+      "en": "Neftchala",
+      "az": "Neftçala",
+      "ru": "Нефтчала",
+      "tr": "Neftçala",
+      "fr": "Neftchala",
+      "zh": "Neftchala"
+    },
+    "aliases": []
+  },
+  "salyan": {
+    "region": "shirvan_salyan",
+    "type": "district",
+    "lat": 39.5892,
+    "lng": 48.9822,
+    "names": {
+      "en": "Salyan",
+      "az": "Salyan",
+      "ru": "Сальян",
+      "tr": "Salyan",
+      "fr": "Salyan",
+      "zh": "Salyan"
+    },
+    "aliases": []
+  },
+  "shirvan": {
+    "region": "shirvan_salyan",
+    "type": "city",
+    "lat": 39.9403,
+    "lng": 48.9235,
+    "names": {
+      "en": "Shirvan",
+      "az": "Şirvan",
+      "ru": "Ширван",
+      "tr": "Şirvan",
+      "fr": "Shirvan",
+      "zh": "希尔万"
+    },
+    "aliases": []
+  }
+}

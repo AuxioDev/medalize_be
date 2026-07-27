@@ -6,6 +6,8 @@ from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from apps.core.i18n import CITY_CHOICES
+
 logger = logging.getLogger(__name__)
 
 
@@ -166,6 +168,9 @@ class PatientProfile(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     blood_type = models.CharField(max_length=5, blank=True)
     address = models.TextField(blank=True)
+    # Canonical key into apps.core.i18n.locations.json, not free text.
+    city = models.CharField(max_length=64, choices=CITY_CHOICES, blank=True)
+    region = models.CharField(max_length=64, blank=True)
     allergies = models.TextField(blank=True)
     chronic_conditions = models.TextField(blank=True)
     medications = models.TextField(blank=True)

@@ -3,9 +3,13 @@ from django.core.cache import cache
 from django.db import DatabaseError, connection
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from apps.core.geocoding import reverse_geocode
+from apps.core.i18n import locations_payload
+from apps.users.i18n import viewer_language
 from apps.users.models import DoctorProfile
 
 
@@ -51,3 +55,31 @@ def specializations_list(request):
         {'value': value, 'label': label}
         for value, label in DoctorProfile.SPECIALIZATION_CHOICES
     ])
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def locations_list(request):
+    """Every Azerbaijan city/district, grouped by economic region and
+    localized to the viewer's language. See apps.core.i18n.locations_payload."""
+    lang = viewer_language({'request': request})
+    return Response(locations_payload(lang))
+
+
+class ReverseGeocodeView(APIView):
+    """Proxies a single coordinate to Nominatim so the mobile app never talks
+    to a third party directly — see apps.core.geocoding for why."""
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'reverse_geocode'
+
+    def get(self, request):
+        try:
+            lat = float(request.query_params.get('lat'))
+            lng = float(request.query_params.get('lng'))
+        except (TypeError, ValueError):
+            return Response(
+                {'lat': 'lat and lng query parameters are required and must be numbers.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        lang = viewer_language({'request': request})
+        return Response({'address': reverse_geocode(lat, lng, lang)})

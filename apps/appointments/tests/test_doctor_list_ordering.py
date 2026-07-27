@@ -29,7 +29,7 @@ class OrderingTestBase(AppointmentTestBase):
     def _create_workplace(self, doctor, latitude=None, longitude=None):
         return Workplace.objects.create(
             doctor=doctor, name=f'{doctor.first_name} Clinic', address='1 Test St',
-            city='Baku', type='clinic', is_primary=True,
+            city='baku', type='clinic', is_primary=True,
             latitude=latitude, longitude=longitude,
         )
 

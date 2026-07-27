@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.core.i18n import city_coordinates, city_label, city_region, region_label
 from apps.users.i18n import specialization_label, viewer_language
 from apps.users.models import DoctorProfile
 from .models import BlockedPeriod, Workplace, WorkingHours
@@ -67,11 +68,72 @@ class WorkingHoursSerializer(serializers.ModelSerializer):
 class WorkplaceSerializer(serializers.ModelSerializer):
     working_hours = WorkingHoursSerializer(many=True, read_only=True)
     type_display = serializers.CharField(source='get_type_display', read_only=True)
+    city_display = serializers.SerializerMethodField()
+    region_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Workplace
-        fields = ['id', 'name', 'address', 'city', 'type', 'type_display', 'is_primary', 'working_hours']
-        read_only_fields = ['id', 'is_primary']
+        fields = [
+            'id', 'name', 'address', 'city', 'city_display', 'region', 'region_display',
+            'type', 'type_display', 'is_primary', 'latitude', 'longitude', 'working_hours',
+        ]
+        read_only_fields = ['id', 'is_primary', 'region']
+        extra_kwargs = {
+            'latitude': {'required': False},
+            'longitude': {'required': False},
+        }
+
+    def get_city_display(self, obj):
+        return city_label(obj.city, viewer_language(self.context))
+
+    def get_region_display(self, obj):
+        return region_label(obj.region, viewer_language(self.context)) if obj.region else ''
+
+    def validate(self, attrs):
+        has_lat = attrs.get('latitude') is not None
+        has_lng = attrs.get('longitude') is not None
+        if has_lat != has_lng:
+            raise serializers.ValidationError(
+                {'latitude': 'latitude and longitude must be provided together.'}
+            )
+        return attrs
+
+    def _apply_city(self, validated_data):
+        """`region` is derived from `city` — see apps.core.i18n.city_region.
+        Coordinates are the doctor's own map pin when provided (see
+        create/update below); only fall back to the city centroid when
+        they aren't."""
+        city = validated_data.get('city')
+        if city:
+            validated_data['region'] = city_region(city) or ''
+        return validated_data
+
+    def create(self, validated_data):
+        has_explicit_coords = (
+            'latitude' in validated_data and 'longitude' in validated_data
+        )
+        validated_data = self._apply_city(validated_data)
+        workplace = super().create(validated_data)
+        if not has_explicit_coords:
+            coords = city_coordinates(workplace.city)
+            if coords:
+                workplace.latitude, workplace.longitude = coords
+                workplace.save(update_fields=['latitude', 'longitude'])
+        return workplace
+
+    def update(self, instance, validated_data):
+        has_explicit_coords = (
+            'latitude' in validated_data and 'longitude' in validated_data
+        )
+        city_changed = 'city' in validated_data and validated_data['city'] != instance.city
+        validated_data = self._apply_city(validated_data)
+        workplace = super().update(instance, validated_data)
+        if city_changed and not has_explicit_coords:
+            coords = city_coordinates(workplace.city)
+            if coords:
+                workplace.latitude, workplace.longitude = coords
+                workplace.save(update_fields=['latitude', 'longitude'])
+        return workplace
 
 
 class WorkingHoursReplaceItemSerializer(serializers.Serializer):

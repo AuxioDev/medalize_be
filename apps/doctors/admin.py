@@ -5,9 +5,9 @@ from .models import BlockedPeriod, Workplace, WorkingHours
 
 @admin.register(Workplace)
 class WorkplaceAdmin(admin.ModelAdmin):
-    list_display = ['name', 'city', 'type', 'is_primary', 'doctor']
-    list_filter = ['type', 'is_primary', 'city']
-    search_fields = ['name', 'doctor__email']
+    list_display = ['name', 'city', 'region', 'type', 'is_primary', 'doctor']
+    list_filter = ['region', 'type', 'is_primary', 'city']
+    search_fields = ['name', 'doctor__email', 'city', 'address']
     raw_id_fields = ['doctor']
 
 

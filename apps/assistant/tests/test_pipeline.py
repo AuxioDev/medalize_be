@@ -19,7 +19,7 @@ User = get_user_model()
 
 
 def create_verified_doctor(email, first_name, last_name, specialization='cardiology',
-                           city='Baku', verified=True):
+                           city='baku', verified=True):
     doctor = User.objects.create_user(
         email=email, password='Pass1234', role='doctor',
         first_name=first_name, last_name=last_name,
@@ -281,7 +281,7 @@ class SearchDoctorsQueryTests(AssistantTestCase):
         )
         add_review(self.cardio_low, self.patient, 3, slot_index=1)
         self.cardio_ganja = create_verified_doctor(
-            'ganja@test.com', 'Gunel', 'Ganja', specialization='cardiology', city='Ganja'
+            'ganja@test.com', 'Gunel', 'Ganja', specialization='cardiology', city='ganja'
         )
         self.unverified = create_verified_doctor(
             'unverified@test.com', 'Uma', 'Hidden', specialization='cardiology', verified=False
@@ -305,7 +305,18 @@ class SearchDoctorsQueryTests(AssistantTestCase):
     def test_city_filter(self):
         results = search_doctors('cardiology', city='ganja')
         self.assertEqual([r['first_name'] for r in results], ['Gunel'])
-        self.assertEqual(results[0]['city'], 'Ganja')
+        self.assertEqual(results[0]['city'], 'ganja')
+        self.assertEqual(results[0]['city_display'], 'Ganja')
+
+    def test_city_filter_accepts_free_text_alias(self):
+        # 'Gəncə' (Azerbaijani spelling) must resolve to the same canonical
+        # key as 'ganja' — see apps.core.i18n.resolve_city_key.
+        results = search_doctors('cardiology', city='Gəncə')
+        self.assertEqual([r['first_name'] for r in results], ['Gunel'])
+
+    def test_city_filter_unresolvable_value_returns_empty(self):
+        results = search_doctors('cardiology', city='Atlantis')
+        self.assertEqual(results, [])
 
     def test_specialization_display_localized(self):
         results = search_doctors('cardiology', lang='ru')

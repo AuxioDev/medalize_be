@@ -8,6 +8,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.settings import api_settings
 from django.contrib.auth.models import update_last_login
 
+from apps.core.i18n import city_label, city_region, region_label
+
 from .i18n import specialization_label, viewer_language
 from .models import DoctorProfile, EmailChangeRequest, PatientProfile, PasswordResetOTP, UserDevice
 from .tokens import MedalizeRefreshToken
@@ -129,9 +131,27 @@ class RegisterSerializer(serializers.Serializer):
 
 
 class PatientProfileSerializer(serializers.ModelSerializer):
+    city_display = serializers.SerializerMethodField()
+    region_display = serializers.SerializerMethodField()
+
     class Meta:
         model = PatientProfile
-        fields = ['date_of_birth', 'blood_type', 'address', 'allergies', 'chronic_conditions', 'medications']
+        fields = [
+            'date_of_birth', 'blood_type', 'address', 'city', 'city_display',
+            'region', 'region_display', 'allergies', 'chronic_conditions', 'medications',
+        ]
+        read_only_fields = ['region']
+
+    def get_city_display(self, obj):
+        return city_label(obj.city, viewer_language(self.context)) if obj.city else ''
+
+    def get_region_display(self, obj):
+        return region_label(obj.region, viewer_language(self.context)) if obj.region else ''
+
+    def update(self, instance, validated_data):
+        if 'city' in validated_data:
+            validated_data['region'] = city_region(validated_data['city']) or ''
+        return super().update(instance, validated_data)
 
 
 class DoctorProfileSerializer(serializers.ModelSerializer):

@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 
 logger = logging.getLogger(__name__)
 
+from apps.core.i18n import resolve_city_key
 from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
 from apps.users.permissions import IsDoctor, IsPatient
 from .models import Appointment, CANCELLATION_WINDOW_HOURS, Favorite, Review, Waitlist
@@ -149,6 +150,7 @@ class DoctorListView(APIView):
         name = request.query_params.get('name', '').strip()
         specialization = request.query_params.get('specialization', '').strip()
         city = request.query_params.get('city', '').strip()
+        region = request.query_params.get('region', '').strip()
         min_rating = request.query_params.get('min_rating', '').strip()
         ordering = request.query_params.get('ordering', '').strip()
 
@@ -157,7 +159,14 @@ class DoctorListView(APIView):
         if specialization:
             qs = qs.filter(doctor_profile__specialization=specialization)
         if city:
-            qs = qs.filter(workplaces__city__icontains=city).distinct()
+            # Accepts a canonical key or free text in any of the 6 registry
+            # languages/aliases — see apps.core.i18n.resolve_city_key. An
+            # unresolvable value is treated as "no such city" (empty result,
+            # not a 400) to match the soft-fail behavior of min_rating below.
+            city_key = resolve_city_key(city)
+            qs = qs.filter(workplaces__city=city_key).distinct() if city_key else qs.none()
+        if region:
+            qs = qs.filter(workplaces__region=region).distinct()
         if min_rating:
             try:
                 min_rating_val = float(min_rating)

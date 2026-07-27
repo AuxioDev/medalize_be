@@ -47,7 +47,7 @@ def workplace_payload(**kwargs):
     data = {
         'name': 'Test Clinic',
         'address': '123 Main St',
-        'city': 'Baku',
+        'city': 'baku',
         'type': 'clinic',
     }
     data.update(kwargs)
@@ -116,6 +116,77 @@ class WorkplaceTests(DoctorAuthTestCase):
     def test_delete_nonexistent_workplace_returns_404(self):
         res = self.client.delete(f'{WORKPLACES_URL}{uuid.uuid4()}/')
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_create_workplace_derives_region_and_centroid_from_city(self):
+        res = self.client.post(WORKPLACES_URL, workplace_payload(city='ganja'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['city'], 'ganja')
+        self.assertEqual(res.data['city_display'], 'Ganja')
+        self.assertEqual(res.data['region'], 'ganja_dashkasan')
+        self.assertEqual(res.data['region_display'], 'Ganja-Dashkasan')
+
+        wp = Workplace.objects.get(pk=res.data['id'])
+        self.assertAlmostEqual(float(wp.latitude), 40.6828)
+        self.assertAlmostEqual(float(wp.longitude), 46.3606)
+
+    def test_create_workplace_rejects_unknown_city(self):
+        res = self.client.post(WORKPLACES_URL, workplace_payload(city='atlantis'), format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_city_updates_region_and_centroid(self):
+        wp = Workplace.objects.create(doctor=self.doctor, **workplace_payload())
+        res = self.client.patch(f'{WORKPLACES_URL}{wp.pk}/', {'city': 'shirvan'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['region'], 'shirvan_salyan')
+
+        wp.refresh_from_db()
+        self.assertAlmostEqual(float(wp.latitude), 39.9403)
+        self.assertAlmostEqual(float(wp.longitude), 48.9235)
+
+    def test_patch_without_city_leaves_coordinates_untouched(self):
+        wp = Workplace.objects.create(
+            doctor=self.doctor, **workplace_payload(), latitude='40.000000', longitude='49.000000',
+        )
+        res = self.client.patch(f'{WORKPLACES_URL}{wp.pk}/', {'name': 'Renamed'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        wp.refresh_from_db()
+        self.assertEqual(str(wp.latitude), '40.000000')
+        self.assertEqual(str(wp.longitude), '49.000000')
+
+    def test_create_workplace_with_explicit_coordinates_overrides_centroid(self):
+        payload = workplace_payload(city='baku')
+        payload['latitude'] = '40.377900'
+        payload['longitude'] = '49.892400'
+        res = self.client.post(WORKPLACES_URL, payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        wp = Workplace.objects.get(pk=res.data['id'])
+        # Baku's centroid is 40.4093/49.8671 — a doctor-pinned point inside
+        # the city must NOT be silently replaced by it.
+        self.assertEqual(str(wp.latitude), '40.377900')
+        self.assertEqual(str(wp.longitude), '49.892400')
+
+    def test_patch_city_and_explicit_coordinates_together_keeps_explicit(self):
+        wp = Workplace.objects.create(doctor=self.doctor, **workplace_payload())
+        res = self.client.patch(
+            f'{WORKPLACES_URL}{wp.pk}/',
+            {'city': 'ganja', 'latitude': '40.700000', 'longitude': '46.300000'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['region'], 'ganja_dashkasan')
+
+        wp.refresh_from_db()
+        self.assertEqual(str(wp.latitude), '40.700000')
+        self.assertEqual(str(wp.longitude), '46.300000')
+
+    def test_patch_latitude_without_longitude_returns_400(self):
+        wp = Workplace.objects.create(doctor=self.doctor, **workplace_payload())
+        res = self.client.patch(
+            f'{WORKPLACES_URL}{wp.pk}/', {'latitude': '40.000000'}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_set_primary_sets_flag(self):
         wp = Workplace.objects.create(doctor=self.doctor, **workplace_payload())

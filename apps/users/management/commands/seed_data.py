@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.appointments.models import Appointment
+from apps.core.i18n import city_region
 from apps.doctors.models import BlockedPeriod, WorkingHours, Workplace
 from apps.notifications.models import Notification
 from apps.users.models import DoctorProfile, PatientProfile
@@ -169,7 +170,8 @@ class Command(BaseCommand):
                 'phone': '+994506781234',
                 'date_of_birth': date(1990, 3, 15),
                 'blood_type': 'A+',
-                'address': 'Bakı, Nəsimi r., Füzuli küçəsi 12',
+                'city': 'baku',
+                'address': 'Nəsimi r., Füzuli küçəsi 12',
             },
             {
                 'email': 'rauf.qahramanov@gmail.com',
@@ -178,7 +180,8 @@ class Command(BaseCommand):
                 'phone': '+994707892345',
                 'date_of_birth': date(1985, 7, 22),
                 'blood_type': 'B+',
-                'address': 'Gəncə, Nizami küçəsi 45',
+                'city': 'ganja',
+                'address': 'Nizami küçəsi 45',
             },
             {
                 'email': 'gunel.nasirzade@gmail.com',
@@ -187,7 +190,8 @@ class Command(BaseCommand):
                 'phone': '+994998903456',
                 'date_of_birth': date(1995, 11, 8),
                 'blood_type': 'O+',
-                'address': 'Sumqayıt, 27-ci mikrorayon',
+                'city': 'sumgait',
+                'address': '27-ci mikrorayon',
             },
             {
                 'email': 'elcin.valiyev@gmail.com',
@@ -196,7 +200,8 @@ class Command(BaseCommand):
                 'phone': '+994559014567',
                 'date_of_birth': date(1988, 4, 30),
                 'blood_type': 'AB+',
-                'address': 'Bakı, Xətai r., Akad. H.Əliyev küçəsi 7',
+                'city': 'baku',
+                'address': 'Xətai r., Akad. H.Əliyev küçəsi 7',
             },
             {
                 'email': 'sevinc.mammadova@gmail.com',
@@ -205,7 +210,8 @@ class Command(BaseCommand):
                 'phone': '+994779125678',
                 'date_of_birth': date(1992, 9, 17),
                 'blood_type': 'A-',
-                'address': 'Lənkəran, Hüseyn Cavid küçəsi 23',
+                'city': 'lankaran',
+                'address': 'Hüseyn Cavid küçəsi 23',
             },
             {
                 'email': 'murad.mirzayev@gmail.com',
@@ -214,7 +220,8 @@ class Command(BaseCommand):
                 'phone': '+994519236789',
                 'date_of_birth': date(1983, 1, 5),
                 'blood_type': 'B-',
-                'address': 'Mingəçevir, Zəfər küçəsi 11',
+                'city': 'mingachevir',
+                'address': 'Zəfər küçəsi 11',
             },
             {
                 'email': 'xadica.rahimova@gmail.com',
@@ -223,7 +230,8 @@ class Command(BaseCommand):
                 'phone': '+994709347890',
                 'date_of_birth': date(1998, 6, 28),
                 'blood_type': 'O-',
-                'address': 'Bakı, Sabunçu r., Maştağa qəs., Azərbaycan küçəsi 34',
+                'city': 'baku',
+                'address': 'Sabunçu r., Maştağa qəs., Azərbaycan küçəsi 34',
             },
             {
                 'email': 'kamran.abbasov@gmail.com',
@@ -232,7 +240,8 @@ class Command(BaseCommand):
                 'phone': '+994998458901',
                 'date_of_birth': date(1979, 12, 14),
                 'blood_type': 'A+',
-                'address': 'Şirvan, Müstəqillik küçəsi 18',
+                'city': 'shirvan',
+                'address': 'Müstəqillik küçəsi 18',
             },
             {
                 'email': 'lale.asgarova@gmail.com',
@@ -241,7 +250,8 @@ class Command(BaseCommand):
                 'phone': '+994559569012',
                 'date_of_birth': date(2000, 2, 11),
                 'blood_type': 'AB-',
-                'address': 'Bakı, Binəqədi r., 7-ci massiv, M.Müşfiq küçəsi 5',
+                'city': 'baku',
+                'address': 'Binəqədi r., 7-ci massiv, M.Müşfiq küçəsi 5',
             },
             {
                 'email': 'farah.sukurlu@gmail.com',
@@ -250,7 +260,8 @@ class Command(BaseCommand):
                 'phone': '+994776670123',
                 'date_of_birth': date(1993, 8, 19),
                 'blood_type': 'B+',
-                'address': 'Gəncə, Mustafayev küçəsi 67',
+                'city': 'ganja',
+                'address': 'Mustafayev küçəsi 67',
             },
         ]
 
@@ -260,6 +271,7 @@ class Command(BaseCommand):
                 'date_of_birth': data.pop('date_of_birth'),
                 'blood_type': data.pop('blood_type'),
                 'address': data.pop('address'),
+                'city': data.pop('city'),
             }
             user, created = User.objects.get_or_create(
                 email=data['email'],
@@ -273,6 +285,8 @@ class Command(BaseCommand):
             profile.date_of_birth = profile_fields['date_of_birth']
             profile.blood_type = profile_fields['blood_type']
             profile.address = profile_fields['address']
+            profile.city = profile_fields['city']
+            profile.region = city_region(profile_fields['city']) or ''
             profile.save()
 
             patients.append(user)
@@ -289,7 +303,7 @@ class Command(BaseCommand):
                 'doctor_idx': 0,
                 'name': 'Respublika Kardioloji Mərkəzi',
                 'address': 'Bakı şəhəri, Lermontov küçəsi 122',
-                'city': 'Bakı',
+                'city': 'baku',
                 'type': 'hospital',
                 'is_primary': True,
                 'active_days': [0, 1, 2, 3, 4],
@@ -300,7 +314,7 @@ class Command(BaseCommand):
                 'doctor_idx': 0,
                 'name': 'MedLife Klinikası',
                 'address': 'Bakı şəhəri, İstiqlaliyyət küçəsi 33',
-                'city': 'Bakı',
+                'city': 'baku',
                 'type': 'clinic',
                 'is_primary': False,
                 'active_days': [5],
@@ -312,7 +326,7 @@ class Command(BaseCommand):
                 'doctor_idx': 1,
                 'name': 'Uşaq Klinik Xəstəxanası №1',
                 'address': 'Bakı şəhəri, Hüsü Hacıyev küçəsi 67',
-                'city': 'Bakı',
+                'city': 'baku',
                 'type': 'hospital',
                 'is_primary': True,
                 'active_days': [0, 1, 2, 3, 4],
@@ -324,7 +338,7 @@ class Command(BaseCommand):
                 'doctor_idx': 2,
                 'name': 'Sumqayıt Şəhər Poliklinikası №3',
                 'address': 'Sumqayıt şəhəri, 14-cü mikrorayon',
-                'city': 'Sumqayıt',
+                'city': 'sumgait',
                 'type': 'clinic',
                 'is_primary': True,
                 'active_days': [0, 1, 2, 3, 4],
@@ -335,7 +349,7 @@ class Command(BaseCommand):
                 'doctor_idx': 2,
                 'name': 'Özel Sağlıq Mərkəzi',
                 'address': 'Sumqayıt şəhəri, Azneft meydanı 2',
-                'city': 'Sumqayıt',
+                'city': 'sumgait',
                 'type': 'private',
                 'is_primary': False,
                 'active_days': [5, 6],
@@ -347,7 +361,7 @@ class Command(BaseCommand):
                 'doctor_idx': 3,
                 'name': 'Dərmatologiya və Kosmetologiya Mərkəzi',
                 'address': 'Bakı şəhəri, Nizami küçəsi 56',
-                'city': 'Bakı',
+                'city': 'baku',
                 'type': 'clinic',
                 'is_primary': True,
                 'active_days': [0, 1, 2, 3, 4, 5],
@@ -359,7 +373,7 @@ class Command(BaseCommand):
                 'doctor_idx': 4,
                 'name': 'Gəncə Regional Xəstəxanası',
                 'address': 'Gəncə şəhəri, Mustafayev küçəsi 134',
-                'city': 'Gəncə',
+                'city': 'ganja',
                 'type': 'hospital',
                 'is_primary': True,
                 'active_days': [0, 1, 2, 3, 4],
@@ -374,6 +388,7 @@ class Command(BaseCommand):
             active_days = data.pop('active_days')
             start = data.pop('start')
             end = data.pop('end')
+            data['region'] = city_region(data['city']) or ''
 
             wp, created = Workplace.objects.get_or_create(
                 doctor=doctor,

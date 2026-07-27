@@ -1,10 +1,11 @@
 import uuid
 
 from django.conf import settings
-from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+from apps.core.i18n import CITY_CHOICES
 
 
 class Workplace(models.Model):
@@ -22,7 +23,12 @@ class Workplace(models.Model):
     )
     name = models.CharField(max_length=200)
     address = models.CharField(max_length=500)
-    city = models.CharField(max_length=100)
+    # Canonical key into apps.core.i18n.locations.json, not free text.
+    city = models.CharField(max_length=64, choices=CITY_CHOICES, db_index=True)
+    # Denormalized from `city` so filtering by region doesn't need a
+    # registry lookup — see apps.core.i18n.city_region(). Backfilled by
+    # migration 0004; save() keeps it in sync going forward.
+    region = models.CharField(max_length=64, db_index=True, default='')
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     is_primary = models.BooleanField(default=False)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -30,11 +36,6 @@ class Workplace(models.Model):
 
     class Meta:
         ordering = ['-is_primary', 'name']
-        indexes = [
-            # Doctor search filters city with icontains — a plain B-tree
-            # index can't accelerate that; trigram + GIN does.
-            GinIndex(fields=['city'], name='workplace_city_trgm_idx', opclasses=['gin_trgm_ops']),
-        ]
 
     def __str__(self):
         return f'{self.name} ({self.city})'

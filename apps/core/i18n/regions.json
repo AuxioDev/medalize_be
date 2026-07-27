@@ -1,0 +1,114 @@
+{
+  "baku": {
+    "en": "Baku",
+    "az": "Bakı",
+    "ru": "Баку",
+    "tr": "Bakü",
+    "fr": "Bakou",
+    "zh": "巴库"
+  },
+  "absheron_khizi": {
+    "en": "Absheron-Khizi",
+    "az": "Abşeron-Xızı",
+    "ru": "Абшерон-Хызы",
+    "tr": "Abşeron-Hızı",
+    "fr": "Absheron-Khizi",
+    "zh": "Absheron-Khizi"
+  },
+  "ganja_dashkasan": {
+    "en": "Ganja-Dashkasan",
+    "az": "Gəncə-Daşkəsən",
+    "ru": "Гянджа-Дашкесан",
+    "tr": "Gence-Daşkesen",
+    "fr": "Ganja-Dashkasan",
+    "zh": "Ganja-Dashkasan"
+  },
+  "shaki_zagatala": {
+    "en": "Shaki-Zagatala",
+    "az": "Şəki-Zaqatala",
+    "ru": "Шеки-Загатала",
+    "tr": "Şeki-Zakatala",
+    "fr": "Shaki-Zagatala",
+    "zh": "Shaki-Zagatala"
+  },
+  "lankaran_astara": {
+    "en": "Lankaran-Astara",
+    "az": "Lənkəran-Astara",
+    "ru": "Ленкорань-Астара",
+    "tr": "Lenkeran-Astara",
+    "fr": "Lankaran-Astara",
+    "zh": "Lankaran-Astara"
+  },
+  "guba_khachmaz": {
+    "en": "Guba-Khachmaz",
+    "az": "Quba-Xaçmaz",
+    "ru": "Куба-Хачмаз",
+    "tr": "Guba-Hacmaz",
+    "fr": "Guba-Khachmaz",
+    "zh": "Guba-Khachmaz"
+  },
+  "central_aran": {
+    "en": "Central Aran",
+    "az": "Mərkəzi Aran",
+    "ru": "Центральный Аран",
+    "tr": "Merkezi Aran",
+    "fr": "Central Aran",
+    "zh": "Central Aran"
+  },
+  "karabakh": {
+    "en": "Karabakh",
+    "az": "Qarabağ",
+    "ru": "Карабах",
+    "tr": "Karabağ",
+    "fr": "Karabakh",
+    "zh": "卡拉巴赫"
+  },
+  "east_zangezur": {
+    "en": "East Zangezur",
+    "az": "Şərqi Zəngəzur",
+    "ru": "Восточный Зангезур",
+    "tr": "Doğu Zengezur",
+    "fr": "East Zangezur",
+    "zh": "East Zangezur"
+  },
+  "mountainous_shirvan": {
+    "en": "Mountainous Shirvan",
+    "az": "Dağlıq Şirvan",
+    "ru": "Нагорный Ширван",
+    "tr": "Dağlık Şirvan",
+    "fr": "Mountainous Shirvan",
+    "zh": "Mountainous Shirvan"
+  },
+  "nakhchivan": {
+    "en": "Nakhchivan",
+    "az": "Naxçıvan",
+    "ru": "Нахчыван",
+    "tr": "Nahçıvan",
+    "fr": "Nakhitchevan",
+    "zh": "纳希切万"
+  },
+  "qazakh_tovuz": {
+    "en": "Gazakh-Tovuz",
+    "az": "Qazax-Tovuz",
+    "ru": "Газах-Товуз",
+    "tr": "Gazah-Tovuz",
+    "fr": "Gazakh-Tovuz",
+    "zh": "Gazakh-Tovuz"
+  },
+  "mil_mughan": {
+    "en": "Mil-Mughan",
+    "az": "Mil-Muğan",
+    "ru": "Миль-Муган",
+    "tr": "Mil-Muğan",
+    "fr": "Mil-Mughan",
+    "zh": "Mil-Mughan"
+  },
+  "shirvan_salyan": {
+    "en": "Shirvan-Salyan",
+    "az": "Şirvan-Salyan",
+    "ru": "Ширван-Сальян",
+    "tr": "Şirvan-Salyan",
+    "fr": "Shirvan-Salyan",
+    "zh": "Shirvan-Salyan"
+  }
+}

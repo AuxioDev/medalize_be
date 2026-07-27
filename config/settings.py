@@ -187,6 +187,10 @@ REST_FRAMEWORK = {
         'appointment_book': '20/hour',
         'appointment_mutate': '30/hour',
         'file_upload': '30/hour',
+        # Nominatim's usage policy caps at 1 req/sec across the whole
+        # backend; this per-user cap keeps us well under that even if
+        # several doctors edit workplaces at once.
+        'reverse_geocode': '20/minute',
     },
 }
 

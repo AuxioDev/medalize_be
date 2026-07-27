@@ -56,7 +56,7 @@ class AppointmentTestBase(APITestCase):
 
         self.workplace = Workplace.objects.create(
             doctor=self.doctor, name='Test Clinic', address='123 Main St',
-            city='Baku', type='clinic',
+            city='baku', region='baku', type='clinic',
         )
         # A date 8 days out, with that weekday's working hours active 09:00–17:00.
         self.future_date = (timezone.now() + datetime.timedelta(days=8)).date()
@@ -110,6 +110,32 @@ class DoctorDiscoveryTests(AppointmentTestBase):
         res = self.client.get(f'{DOCTORS_URL}?name=John')
         self.assertEqual(res.data['count'], 1)
         res = self.client.get(f'{DOCTORS_URL}?name=Nobody')
+        self.assertEqual(res.data['count'], 0)
+
+    def test_list_doctors_filter_by_city_key(self):
+        self.as_patient()
+        res = self.client.get(f'{DOCTORS_URL}?city=baku')
+        self.assertEqual(res.data['count'], 1)
+        res = self.client.get(f'{DOCTORS_URL}?city=ganja')
+        self.assertEqual(res.data['count'], 0)
+
+    def test_list_doctors_filter_by_city_free_text_alias(self):
+        # 'Bakı' (Azerbaijani spelling) must resolve to the same canonical
+        # key as 'baku' — see apps.core.i18n.resolve_city_key.
+        self.as_patient()
+        res = self.client.get(f'{DOCTORS_URL}?city=Bakı')
+        self.assertEqual(res.data['count'], 1)
+
+    def test_list_doctors_filter_by_unresolvable_city_returns_empty(self):
+        self.as_patient()
+        res = self.client.get(f'{DOCTORS_URL}?city=Atlantis')
+        self.assertEqual(res.data['count'], 0)
+
+    def test_list_doctors_filter_by_region(self):
+        self.as_patient()
+        res = self.client.get(f'{DOCTORS_URL}?region=baku')
+        self.assertEqual(res.data['count'], 1)
+        res = self.client.get(f'{DOCTORS_URL}?region=karabakh')
         self.assertEqual(res.data['count'], 0)
 
     def test_doctor_detail_returns_200(self):
