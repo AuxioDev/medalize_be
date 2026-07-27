@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
-from .models import Conversation, Message
+from apps.users.i18n import specialization_label
+
+from .models import Conversation, Message, ResponseTemplate
 
 _PREVIEW_LENGTH = 120
 
@@ -31,3 +33,29 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = ['id', 'created_at', 'updated_at', 'messages']
+
+
+class ResponseTemplateOptionSerializer(serializers.ModelSerializer):
+    """Read-only quick-reply option for the template bank. ``label`` is the
+    template's own first trigger phrase (capitalized) in the requesting
+    patient's language, passed in via serializer context — reusing a trigger
+    guarantees tapping the button sends text that matches its own template."""
+    specialization_display = serializers.SerializerMethodField()
+    label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ResponseTemplate
+        fields = ['id', 'specialization', 'specialization_display', 'label']
+
+    def get_specialization_display(self, obj):
+        if not obj.specialization:
+            return ''
+        return specialization_label(obj.specialization, self.context['lang'])
+
+    def get_label(self, obj):
+        lang = self.context['lang']
+        triggers = obj.triggers.get(lang) or obj.triggers.get('en') or []
+        if not triggers:
+            return ''
+        text = triggers[0]
+        return text[:1].upper() + text[1:]

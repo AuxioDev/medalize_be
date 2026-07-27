@@ -9,6 +9,7 @@ User = get_user_model()
 TEST_ENCRYPTION_KEY = Fernet.generate_key().decode()
 
 CONVERSATIONS_URL = '/api/assistant/conversations/'
+TEMPLATES_URL = '/api/assistant/templates/'
 
 
 def conversation_url(pk):

@@ -5,10 +5,11 @@ from django.test import override_settings
 from rest_framework import status
 
 from apps.assistant.i18n import assistant_message
-from apps.assistant.models import Conversation, Message
+from apps.assistant.models import Conversation, Message, ResponseTemplate
 
 from .base import (
     CONVERSATIONS_URL,
+    TEMPLATES_URL,
     AssistantTestCase,
     conversation_url,
     flag_url,
@@ -84,6 +85,58 @@ class ConversationCrudTests(AssistantTestCase):
         self.client.force_authenticate(None)
         res = self.client.get(CONVERSATIONS_URL)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class TemplateOptionListTests(AssistantTestCase):
+    def setUp(self):
+        super().setUp()
+        self.headache = ResponseTemplate.objects.create(
+            specialization='general_practice',
+            triggers={'en': ['headache', 'my head hurts'], 'ru': ['головная боль']},
+            answers={'en': 'Rest and drink water.', 'ru': 'Отдохните и пейте воду.'},
+        )
+        self.cardio = ResponseTemplate.objects.create(
+            specialization='cardiology',
+            triggers={'en': ['heart palpitations'], 'ru': ['учащённое сердцебиение']},
+            answers={'en': 'Try to relax.', 'ru': 'Постарайтесь расслабиться.'},
+        )
+        self.inactive = ResponseTemplate.objects.create(
+            specialization='dermatology',
+            triggers={'en': ['inactive topic']},
+            answers={'en': 'Should never be listed.'},
+            is_active=False,
+        )
+
+    def test_lists_only_active_templates(self):
+        res = self.client.get(TEMPLATES_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ids = {t['id'] for t in res.data}
+        self.assertEqual(ids, {str(self.headache.id), str(self.cardio.id)})
+
+    def test_label_is_first_trigger_capitalized(self):
+        res = self.client.get(TEMPLATES_URL)
+        by_id = {t['id']: t for t in res.data}
+        self.assertEqual(by_id[str(self.headache.id)]['label'], 'Headache')
+        self.assertEqual(by_id[str(self.cardio.id)]['label'], 'Heart palpitations')
+
+    def test_label_is_localized_to_patient_language(self):
+        self.patient.language = 'ru'
+        self.patient.save(update_fields=['language'])
+        res = self.client.get(TEMPLATES_URL)
+        by_id = {t['id']: t for t in res.data}
+        self.assertEqual(by_id[str(self.headache.id)]['label'], 'Головная боль')
+
+    def test_specialization_display_included(self):
+        res = self.client.get(TEMPLATES_URL)
+        by_id = {t['id']: t for t in res.data}
+        self.assertEqual(by_id[str(self.cardio.id)]['specialization'], 'cardiology')
+        self.assertTrue(by_id[str(self.cardio.id)]['specialization_display'])
+
+    def test_doctor_role_gets_403(self):
+        doctor = User.objects.create_user(email='doc2@test.com', password='Pass1234', role='doctor')
+        self.client.force_authenticate(doctor)
+        res = self.client.get(TEMPLATES_URL)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class MessageValidationTests(AssistantTestCase):
@@ -202,6 +255,7 @@ class FeatureDisabledTests(AssistantTestCase):
             self.client.delete(conversation_url(pk)),
             self.client.post(messages_url(pk), {'content': 'hi'}, format='json'),
             self.client.post(flag_url(pk), {}, format='json'),
+            self.client.get(TEMPLATES_URL),
         ]
         for res in checks:
             self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)

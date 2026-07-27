@@ -11,11 +11,12 @@ from apps.notifications.i18n import recipient_language
 from apps.users.permissions import IsPatient
 
 from .i18n import assistant_message
-from .models import Conversation, Message
+from .models import Conversation, Message, ResponseTemplate
 from .serializers import (
     ConversationDetailSerializer,
     ConversationListSerializer,
     MessageSerializer,
+    ResponseTemplateOptionSerializer,
 )
 from .service import handle_user_message
 
@@ -133,6 +134,19 @@ class ConversationMessageView(AssistantBaseView):
             return _unavailable_response(request.user)
 
         return Response(MessageSerializer(reply).data, status=status.HTTP_201_CREATED)
+
+
+class TemplateOptionListView(AssistantBaseView):
+    """Read-only quick-reply options for the mobile chat's empty state — the
+    whole active ResponseTemplate bank, labeled in the patient's language."""
+
+    def get(self, request):
+        if not self._feature_enabled:
+            return _unavailable_response(request.user)
+        lang = recipient_language(request.user)
+        templates = ResponseTemplate.objects.filter(is_active=True).order_by('specialization', 'created_at')
+        serializer = ResponseTemplateOptionSerializer(templates, many=True, context={'lang': lang})
+        return Response(serializer.data)
 
 
 class MessageFlagView(AssistantBaseView):
