@@ -638,6 +638,33 @@ def send_subscription_notification(user_id, template_key):
 
 
 @shared_task
+def send_hospital_notification(user_id, template_key, **kwargs):
+    """Shared by every hospital-account lifecycle event (claim approved/
+    rejected, a doctor requesting/being invited/confirmed/removed) —
+    mirrors send_subscription_notification's one-generic-task-for-a-family-
+    of-templates shape, but accepts interpolation kwargs since some of
+    these templates (unlike the parameterless subscription ones) carry
+    {doctor_name}/{hospital_name} placeholders — see templates.json's
+    hospital_* keys."""
+    from apps.users.models import User
+    from .models import Notification
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return
+
+    tpl = render_template(template_key, recipient_language(user), **kwargs)
+    Notification.objects.create(
+        user=user,
+        type=Notification.TYPE_HOSPITAL,
+        title=tpl['title'],
+        message=tpl['body'],
+    )
+    _send_email(tpl['subject'], tpl['body'], user)
+    _send_push(user, tpl['title'], tpl['body'], data={'type': 'hospital'})
+
+
+@shared_task
 def expire_stale_pending_appointments():
     """Decline appointments still pending past their start time (the doctor never
     confirmed or declined). Prevents them lingering forever and frees the slot."""

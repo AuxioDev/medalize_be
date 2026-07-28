@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
+from apps.hospitals.models import Hospital
+
 from .models import DoctorProfile, PatientProfile, SocialAccount, User, UserDevice
 
 
@@ -12,6 +14,20 @@ class DoctorProfileInline(admin.StackedInline):
 class PatientProfileInline(admin.StackedInline):
     model = PatientProfile
     can_delete = False
+
+
+class HospitalInline(admin.StackedInline):
+    """Read-only convenience view of the Hospital row this account owns —
+    the actual claim-approval and registry-curation actions live on
+    apps.hospitals.admin.HospitalAdmin (registered separately, same
+    relationship as DoctorProfileAdmin's verify/unverify actions above),
+    not here."""
+
+    model = Hospital
+    fk_name = 'owner'
+    can_delete = False
+    fields = ['id', 'name', 'city', 'status', 'claim_status']
+    readonly_fields = fields
 
 
 @admin.register(User)
@@ -42,6 +58,8 @@ class UserAdmin(BaseUserAdmin):
             return [DoctorProfileInline]
         if obj.role == User.ROLE_PATIENT:
             return [PatientProfileInline]
+        if obj.role == User.ROLE_HOSPITAL:
+            return [HospitalInline]
         return []
 
 

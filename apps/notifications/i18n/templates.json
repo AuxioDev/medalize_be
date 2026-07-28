@@ -806,5 +806,197 @@
       "title": "订阅已激活",
       "body": "您的订阅现已激活。感谢您订阅 Medalize。"
     }
+  },
+  "hospital_approved": {
+    "en": {
+      "subject": "Your Hospital Account is Verified — Medalize",
+      "title": "Account Verified",
+      "body": "Your hospital account has been verified. You can now subscribe and manage your doctors on Medalize."
+    },
+    "ru": {
+      "subject": "Аккаунт больницы подтверждён — Medalize",
+      "title": "Аккаунт подтверждён",
+      "body": "Аккаунт вашей больницы подтверждён. Теперь вы можете оформить подписку и управлять своими врачами в Medalize."
+    },
+    "az": {
+      "subject": "Xəstəxana hesabınız təsdiqləndi — Medalize",
+      "title": "Hesab təsdiqləndi",
+      "body": "Xəstəxananızın hesabı təsdiqləndi. Artıq abunə ola və Medalize-də həkimlərinizi idarə edə bilərsiniz."
+    },
+    "tr": {
+      "subject": "Hastane Hesabınız Onaylandı — Medalize",
+      "title": "Hesap Onaylandı",
+      "body": "Hastane hesabınız onaylandı. Artık abone olabilir ve Medalize'de doktorlarınızı yönetebilirsiniz."
+    },
+    "fr": {
+      "subject": "Votre compte hôpital est vérifié — Medalize",
+      "title": "Compte vérifié",
+      "body": "Le compte de votre hôpital a été vérifié. Vous pouvez désormais vous abonner et gérer vos médecins sur Medalize."
+    },
+    "zh": {
+      "subject": "您的医院账户已通过验证 — Medalize",
+      "title": "账户已验证",
+      "body": "您的医院账户已通过验证。现在您可以订阅并在 Medalize 上管理您的医生。"
+    }
+  },
+  "hospital_rejected": {
+    "en": {
+      "subject": "Hospital Account Application — Medalize",
+      "title": "Application Not Approved",
+      "body": "We were unable to verify your hospital account. Please contact support for details."
+    },
+    "ru": {
+      "subject": "Заявка на аккаунт больницы — Medalize",
+      "title": "Заявка не одобрена",
+      "body": "Мы не смогли подтвердить аккаунт вашей больницы. Пожалуйста, свяжитесь со службой поддержки для уточнения деталей."
+    },
+    "az": {
+      "subject": "Xəstəxana hesabı üçün müraciət — Medalize",
+      "title": "Müraciət təsdiqlənmədi",
+      "body": "Xəstəxananızın hesabını təsdiqləyə bilmədik. Zəhmət olmasa ətraflı məlumat üçün dəstək xidməti ilə əlaqə saxlayın."
+    },
+    "tr": {
+      "subject": "Hastane Hesabı Başvurusu — Medalize",
+      "title": "Başvuru Onaylanmadı",
+      "body": "Hastane hesabınızı doğrulayamadık. Ayrıntılar için lütfen destek ekibiyle iletişime geçin."
+    },
+    "fr": {
+      "subject": "Demande de compte hôpital — Medalize",
+      "title": "Demande non approuvée",
+      "body": "Nous n'avons pas pu vérifier le compte de votre hôpital. Veuillez contacter le support pour plus de détails."
+    },
+    "zh": {
+      "subject": "医院账户申请 — Medalize",
+      "title": "申请未通过",
+      "body": "我们无法验证您的医院账户。详情请联系客服。"
+    }
+  },
+  "hospital_link_requested": {
+    "en": {
+      "subject": "New Doctor Request — Medalize",
+      "title": "New Doctor Request",
+      "body": "Dr. {doctor_name} has requested to join your hospital on Medalize. Review the request in your dashboard."
+    },
+    "ru": {
+      "subject": "Новый запрос от врача — Medalize",
+      "title": "Новый запрос от врача",
+      "body": "Врач {doctor_name} запросил присоединение к вашей больнице в Medalize. Просмотрите запрос в своём кабинете."
+    },
+    "az": {
+      "subject": "Yeni həkim müraciəti — Medalize",
+      "title": "Yeni həkim müraciəti",
+      "body": "Dr. {doctor_name} Medalize-də sizin xəstəxananıza qoşulmaq üçün müraciət edib. Müraciəti idarə panelinizdə nəzərdən keçirin."
+    },
+    "tr": {
+      "subject": "Yeni Doktor Talebi — Medalize",
+      "title": "Yeni Doktor Talebi",
+      "body": "Dr. {doctor_name}, Medalize'de hastanenize katılmak için talepte bulundu. Talebi panelinizden inceleyin."
+    },
+    "fr": {
+      "subject": "Nouvelle demande de médecin — Medalize",
+      "title": "Nouvelle demande de médecin",
+      "body": "Le Dr {doctor_name} a demandé à rejoindre votre hôpital sur Medalize. Examinez la demande dans votre tableau de bord."
+    },
+    "zh": {
+      "subject": "新的医生加入请求 — Medalize",
+      "title": "新的医生加入请求",
+      "body": "{doctor_name} 医生请求加入您在 Medalize 上的医院。请在管理面板中查看该请求。"
+    }
+  },
+  "hospital_link_confirmed": {
+    "en": {
+      "subject": "Hospital Affiliation Confirmed — Medalize",
+      "title": "Affiliation Confirmed",
+      "body": "{hospital_name} has confirmed your affiliation on Medalize."
+    },
+    "ru": {
+      "subject": "Принадлежность к больнице подтверждена — Medalize",
+      "title": "Принадлежность подтверждена",
+      "body": "{hospital_name} подтвердила вашу принадлежность в Medalize."
+    },
+    "az": {
+      "subject": "Xəstəxana ilə əlaqə təsdiqləndi — Medalize",
+      "title": "Əlaqə təsdiqləndi",
+      "body": "{hospital_name} Medalize-də sizinlə əlaqəni təsdiqlədi."
+    },
+    "tr": {
+      "subject": "Hastane Bağlantısı Onaylandı — Medalize",
+      "title": "Bağlantı Onaylandı",
+      "body": "{hospital_name}, Medalize'de sizinle olan bağlantısını onayladı."
+    },
+    "fr": {
+      "subject": "Affiliation à l'hôpital confirmée — Medalize",
+      "title": "Affiliation confirmée",
+      "body": "{hospital_name} a confirmé votre affiliation sur Medalize."
+    },
+    "zh": {
+      "subject": "医院关联已确认 — Medalize",
+      "title": "关联已确认",
+      "body": "{hospital_name} 已在 Medalize 上确认了与您的关联。"
+    }
+  },
+  "hospital_invite_received": {
+    "en": {
+      "subject": "Hospital Invitation — Medalize",
+      "title": "Hospital Invitation",
+      "body": "{hospital_name} has invited you to join their team on Medalize."
+    },
+    "ru": {
+      "subject": "Приглашение от больницы — Medalize",
+      "title": "Приглашение от больницы",
+      "body": "{hospital_name} пригласила вас присоединиться к команде в Medalize."
+    },
+    "az": {
+      "subject": "Xəstəxana dəvəti — Medalize",
+      "title": "Xəstəxana dəvəti",
+      "body": "{hospital_name} sizi Medalize-də komandasına qoşulmağa dəvət etdi."
+    },
+    "tr": {
+      "subject": "Hastane Daveti — Medalize",
+      "title": "Hastane Daveti",
+      "body": "{hospital_name}, Medalize'de ekibine katılmanız için sizi davet etti."
+    },
+    "fr": {
+      "subject": "Invitation d'un hôpital — Medalize",
+      "title": "Invitation d'un hôpital",
+      "body": "{hospital_name} vous a invité à rejoindre son équipe sur Medalize."
+    },
+    "zh": {
+      "subject": "医院邀请 — Medalize",
+      "title": "医院邀请",
+      "body": "{hospital_name} 邀请您加入其在 Medalize 上的团队。"
+    }
+  },
+  "hospital_doctor_removed": {
+    "en": {
+      "subject": "Hospital Affiliation Ended — Medalize",
+      "title": "Affiliation Ended",
+      "body": "Your affiliation with {hospital_name} on Medalize has ended. Your workplace and appointments are not affected."
+    },
+    "ru": {
+      "subject": "Принадлежность к больнице завершена — Medalize",
+      "title": "Принадлежность завершена",
+      "body": "Ваша принадлежность к {hospital_name} в Medalize завершена. Это не влияет на ваше место работы и записи."
+    },
+    "az": {
+      "subject": "Xəstəxana ilə əlaqə sona çatdı — Medalize",
+      "title": "Əlaqə sona çatdı",
+      "body": "{hospital_name} ilə Medalize-dəki əlaqəniz sona çatdı. Bu, iş yeriniz və qəbullarınıza təsir etmir."
+    },
+    "tr": {
+      "subject": "Hastane Bağlantısı Sona Erdi — Medalize",
+      "title": "Bağlantı Sona Erdi",
+      "body": "{hospital_name} ile Medalize'deki bağlantınız sona erdi. Bu durum iş yeriniz ve randevularınızı etkilemez."
+    },
+    "fr": {
+      "subject": "Fin de l'affiliation à l'hôpital — Medalize",
+      "title": "Affiliation terminée",
+      "body": "Votre affiliation avec {hospital_name} sur Medalize a pris fin. Votre lieu de travail et vos rendez-vous ne sont pas affectés."
+    },
+    "zh": {
+      "subject": "医院关联已结束 — Medalize",
+      "title": "关联已结束",
+      "body": "您与 {hospital_name} 在 Medalize 上的关联已结束。您的工作地点和预约不受影响。"
+    }
   }
 }

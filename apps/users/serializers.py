@@ -1,6 +1,7 @@
 import re
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password, make_password
+from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 from rest_framework import serializers
@@ -8,9 +9,9 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.settings import api_settings
 from django.contrib.auth.models import update_last_login
 
-from apps.core.i18n import city_label, city_region, region_label
+from apps.core.i18n import CITY_CHOICES, city_label, city_region, region_label
 from apps.subscriptions.entitlements import subscription_summary
-from apps.subscriptions.models import DoctorSubscription
+from apps.subscriptions.models import Subscription
 
 from .i18n import specialization_label, viewer_language
 from .models import DoctorProfile, EmailChangeRequest, PatientProfile, PasswordResetOTP, UserDevice
@@ -61,9 +62,26 @@ def build_login_payload(user, remember_me=False):
             data['is_verified'] = False
         try:
             subscription = user.subscription
-        except DoctorSubscription.DoesNotExist:
+        except Subscription.DoesNotExist:
             subscription = None
         data['subscription'] = subscription_summary(subscription)
+    elif user.role == User.ROLE_HOSPITAL:
+        data['onboarding_complete'] = True
+        hospital = getattr(user, 'hospital', None)
+        # Overloads is_verified with the hospital's claim approval state —
+        # the mobile client's role-agnostic "isVerified" gate check (see
+        # app_router.dart's _homeFor) reads this the same way it reads a
+        # doctor's is_verified, so the hospital pending-approval screen can
+        # reuse that gate instead of needing a parallel field/branch there.
+        data['is_verified'] = hospital.claim_status == hospital.CLAIM_APPROVED if hospital else False
+        data['hospital'] = {
+            'id': str(hospital.id), 'name': hospital.name, 'claim_status': hospital.claim_status,
+        } if hospital else None
+        try:
+            subscription = user.subscription
+        except Subscription.DoesNotExist:
+            subscription = None
+        data['subscription'] = subscription_summary(subscription, role=User.ROLE_HOSPITAL)
     else:
         data['onboarding_complete'] = True
         data['is_verified'] = None
@@ -99,6 +117,16 @@ class RegisterSerializer(serializers.Serializer):
     # backend re-validates it rather than trusting client-side UI state.
     privacy_consent = serializers.BooleanField(write_only=True)
 
+    # Hospital-only — required (see validate()) only when role='hospital'.
+    # Either `hospital_id` (claiming an existing registry entry the picker
+    # found) OR `hospital_name`+`hospital_city` (no match — create a new
+    # entry, same as a doctor's "add your variant") must be given; see
+    # apps.hospitals.services.claim_or_create_hospital.
+    hospital_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    hospital_name = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
+    hospital_city = serializers.ChoiceField(choices=CITY_CHOICES, required=False, allow_blank=True, default='')
+    hospital_address = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
+
     def validate_privacy_consent(self, value):
         if not value:
             raise serializers.ValidationError(
@@ -124,17 +152,47 @@ class RegisterSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({'password_confirm': 'Passwords do not match.'})
+        if attrs['role'] == User.ROLE_HOSPITAL:
+            has_claim = attrs.get('hospital_id') is not None
+            has_new = bool(attrs.get('hospital_name')) and bool(attrs.get('hospital_city'))
+            if not has_claim and not has_new:
+                raise serializers.ValidationError({
+                    'hospital_name': (
+                        'Select your hospital from the list, or provide its name and city to add it.'
+                    ),
+                })
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         validated_data.pop('privacy_consent')
         password = validated_data.pop('password')
-        return User.objects.create_user(
-            password=password,
-            privacy_consent_accepted_at=timezone.now(),
-            **validated_data,
-        )
+        hospital_id = validated_data.pop('hospital_id', None)
+        hospital_name = validated_data.pop('hospital_name', '')
+        hospital_city = validated_data.pop('hospital_city', '')
+        hospital_address = validated_data.pop('hospital_address', '')
+
+        with transaction.atomic():
+            user = User.objects.create_user(
+                password=password,
+                privacy_consent_accepted_at=timezone.now(),
+                **validated_data,
+            )
+            if user.role == User.ROLE_HOSPITAL:
+                # Imported here, not at module top: apps.hospitals.services
+                # already imports apps.subscriptions.entitlements, and this
+                # keeps apps.users free of a module-level dependency on
+                # apps.hospitals for the (common) non-hospital registration
+                # path.
+                from apps.hospitals.services import claim_or_create_hospital
+                claim_or_create_hospital(
+                    user,
+                    hospital_id=hospital_id,
+                    name=hospital_name,
+                    city=hospital_city,
+                    address=hospital_address,
+                )
+        return user
 
 
 class PatientProfileSerializer(serializers.ModelSerializer):
@@ -216,9 +274,23 @@ class MeSerializer(serializers.ModelSerializer):
                 data['profile'] = {}
             try:
                 subscription = instance.subscription
-            except DoctorSubscription.DoesNotExist:
+            except Subscription.DoesNotExist:
                 subscription = None
             data['subscription'] = subscription_summary(subscription)
+        elif instance.role == User.ROLE_HOSPITAL:
+            from apps.hospitals.serializers import HospitalProfileSerializer
+            hospital = getattr(instance, 'hospital', None)
+            data['is_verified'] = hospital.claim_status == hospital.CLAIM_APPROVED if hospital else False
+            data['onboarding_step'] = 1
+            data['onboarding_complete'] = True
+            data['profile'] = (
+                HospitalProfileSerializer(hospital, context={'request': request}).data if hospital else {}
+            )
+            try:
+                subscription = instance.subscription
+            except Subscription.DoesNotExist:
+                subscription = None
+            data['subscription'] = subscription_summary(subscription, role=User.ROLE_HOSPITAL)
         else:
             try:
                 profile = instance.patient_profile

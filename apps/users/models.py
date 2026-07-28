@@ -52,9 +52,11 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_DOCTOR = 'doctor'
     ROLE_PATIENT = 'patient'
+    ROLE_HOSPITAL = 'hospital'
     ROLE_CHOICES = [
         (ROLE_DOCTOR, 'Doctor'),
         (ROLE_PATIENT, 'Patient'),
+        (ROLE_HOSPITAL, 'Hospital'),
     ]
 
     # Codes match the mobile AppLocale codes and the keys in the i18n JSON
@@ -282,6 +284,20 @@ def create_role_profile(sender, instance, created, **kwargs):
         DoctorProfile.objects.create(user=instance)
     elif instance.role == User.ROLE_PATIENT:
         PatientProfile.objects.create(user=instance)
+    elif instance.role == User.ROLE_HOSPITAL:
+        # Deliberately no profile created here, unlike the two branches
+        # above. A hospital account's "profile" IS a apps.hospitals.models.
+        # Hospital row (claimed or newly created), which needs registration-
+        # time input (an existing hospital_id to claim, or a name+city to
+        # create) that this zero-argument signal has no way to supply.
+        # apps.users.serializers.RegisterSerializer.create() calls
+        # apps.hospitals.services.claim_or_create_hospital() explicitly,
+        # inside the same transaction as this User row, right after this
+        # signal fires. Do not "fix" this branch by adding a bare
+        # HospitalProfile.objects.create(user=instance) call — there is no
+        # such model; the registry entry IS the profile (see apps.hospitals.
+        # models.Hospital's docstring).
+        pass
 
 
 def cancel_future_appointments_for_doctor(doctor):
