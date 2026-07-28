@@ -9,10 +9,14 @@ from rest_framework.views import APIView
 from apps.users.permissions import IsPatient
 
 from .models import DoseLog, Medication
-from .serializers import DoseLogSerializer, MedicationCreateSerializer, MedicationSerializer
+from .serializers import DoseLogSerializer, MedicationScheduleUpdateSerializer, MedicationSerializer
 
 
-class MedicationListCreateView(APIView):
+class MedicationListView(APIView):
+    """Read-only for the patient — a Medication only ever exists because a
+    doctor prescribed it (see apps.prescriptions.PrescriptionApplyView), so
+    there is no patient-facing create endpoint here."""
+
     permission_classes = [IsPatient]
 
     def get(self, request):
@@ -23,12 +27,6 @@ class MedicationListCreateView(APIView):
             .order_by('-is_active', '-created_at')
         )
         return Response(MedicationSerializer(medications, many=True).data)
-
-    def post(self, request):
-        serializer = MedicationCreateSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        medication = serializer.save()
-        return Response(MedicationSerializer(medication).data, status=status.HTTP_201_CREATED)
 
 
 class MedicationDetailView(APIView):
@@ -48,10 +46,10 @@ class MedicationDetailView(APIView):
         return Response(MedicationSerializer(self._get(pk, request.user)).data)
 
     def patch(self, request, pk):
+        # Schedules only — see MedicationScheduleUpdateSerializer for why the
+        # drug itself (name/dosage/form/notes/dependent) isn't patient-editable.
         medication = self._get(pk, request.user)
-        serializer = MedicationCreateSerializer(
-            medication, data=request.data, partial=True, context={'request': request},
-        )
+        serializer = MedicationScheduleUpdateSerializer(medication, data=request.data)
         serializer.is_valid(raise_exception=True)
         medication = serializer.save()
         return Response(MedicationSerializer(medication).data)

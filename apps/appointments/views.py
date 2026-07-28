@@ -729,6 +729,18 @@ class DoctorAppointmentStatusView(APIView):
                     {'code': 'conflict', 'message': 'Only confirmed appointments can be marked as completed.'},
                     status=status.HTTP_409_CONFLICT,
                 )
+            # A prescription can only be issued for a completed appointment
+            # (see apps.prescriptions), so this is also the gate that keeps a
+            # doctor from completing — and then prescribing against — a visit
+            # that hasn't actually started yet.
+            if timezone.now() < appointment.starts_at:
+                return Response(
+                    {
+                        'code': 'conflict',
+                        'message': 'Cannot mark an appointment as completed before it has started.',
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
         elif new_status == Appointment.STATUS_REQUIRES_RESCHEDULING:
             # Doctor asks the patient to pick a new time for an upcoming appt.
             if appointment.status != Appointment.STATUS_CONFIRMED:

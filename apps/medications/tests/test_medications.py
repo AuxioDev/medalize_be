@@ -1,5 +1,3 @@
-import uuid
-
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -34,140 +32,25 @@ class MedicationTestBase(APITestCase):
         self.client.credentials()
 
 
-class MedicationCreateTests(MedicationTestBase):
-    def test_create_medication_without_schedule_returns_201(self):
-        res = self.client.post(
-            MEDICATIONS_URL,
-            {'name': 'Ibuprofen', 'dosage': '200mg', 'form': 'pill', 'notes': 'After meals'},
-            format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(res.data['name'], 'Ibuprofen')
-        self.assertEqual(res.data['source'], Medication.SOURCE_MANUAL)
-        self.assertTrue(res.data['is_active'])
-        self.assertEqual(res.data['schedules'], [])
+class MedicationCreateBlockedTests(MedicationTestBase):
+    """A Medication only ever exists because a doctor prescribed it (see
+    apps.prescriptions.PrescriptionApplyView) — there is no patient-facing
+    way to create one from scratch anymore."""
 
-    def test_create_medication_with_nested_schedules_creates_schedule_rows(self):
-        res = self.client.post(
-            MEDICATIONS_URL,
-            {
-                'name': 'Amoxicillin',
-                'dosage': '500mg',
-                'schedules': [
-                    {'times': ['08:00', '20:00'], 'days_of_week': [], 'start_date': '2026-01-01'},
-                ],
-            },
-            format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        medication = Medication.objects.get(pk=res.data['id'])
-        self.assertEqual(medication.schedules.count(), 1)
-        schedule = medication.schedules.first()
-        self.assertEqual(schedule.times, ['08:00', '20:00'])
-        self.assertEqual(len(res.data['schedules']), 1)
+    def test_patient_post_returns_405(self):
+        res = self.client.post(MEDICATIONS_URL, {'name': 'Ibuprofen'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(Medication.objects.count(), 0)
 
-    def test_create_medication_invalid_time_format_returns_400(self):
-        res = self.client.post(
-            MEDICATIONS_URL,
-            {'name': 'Bad', 'schedules': [{'times': ['8:00'], 'days_of_week': []}]},
-            format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(MedicationSchedule.objects.count(), 0)
-
-    def test_create_medication_invalid_weekday_returns_400(self):
-        res = self.client.post(
-            MEDICATIONS_URL,
-            {'name': 'Bad', 'schedules': [{'times': ['08:00'], 'days_of_week': [7]}]},
-            format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_create_medication_requires_name(self):
-        res = self.client.post(MEDICATIONS_URL, {'dosage': '10mg'}, format='json')
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_doctor_cannot_create_medication(self):
+    def test_doctor_post_returns_403(self):
         self.as_doctor()
-        res = self.client.post(MEDICATIONS_URL, {'name': 'X'}, format='json')
+        res = self.client.post(MEDICATIONS_URL, {'name': 'Ibuprofen'}, format='json')
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_anonymous_cannot_create_medication(self):
+    def test_anonymous_post_returns_401(self):
         self.as_anonymous()
-        res = self.client.post(MEDICATIONS_URL, {'name': 'X'}, format='json')
-        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
-
-
-class DependentMedicationTests(MedicationTestBase):
-    """dependent_id validation on MedicationCreateSerializer — same shared
-    resolve_dependent() rule as booking/records."""
-
-    def _patient(self):
-        from django.contrib.auth import get_user_model
-        return get_user_model().objects.get(email='patient@test.com')
-
-    def setUp(self):
-        super().setUp()
-        self.dependent = Dependent.objects.create(
-            managed_by=self._patient(), first_name='Kid', last_name='Doe', relationship='child',
-        )
-
-    def test_create_with_own_active_dependent_returns_201(self):
-        res = self.client.post(
-            MEDICATIONS_URL,
-            {'name': 'Amoxicillin', 'dependent_id': str(self.dependent.id)},
-            format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(res.data['dependent']['id'], str(self.dependent.id))
-        medication = Medication.objects.get(pk=res.data['id'])
-        self.assertEqual(medication.dependent_id, self.dependent.id)
-        self.assertEqual(medication.patient_id, self._patient().id)
-
-    def test_create_without_dependent_id_leaves_dependent_null(self):
         res = self.client.post(MEDICATIONS_URL, {'name': 'Ibuprofen'}, format='json')
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertIsNone(res.data['dependent'])
-
-    def test_create_with_someone_elses_dependent_returns_400(self):
-        other_token = _register_and_login(self.client, patient_payload(email='dep-other@test.com'))
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
-        res = self.client.post(
-            MEDICATIONS_URL,
-            {'name': 'Amoxicillin', 'dependent_id': str(self.dependent.id)},
-            format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('dependent_id', res.data['errors'])
-
-    def test_create_with_nonexistent_dependent_returns_400(self):
-        res = self.client.post(
-            MEDICATIONS_URL,
-            {'name': 'Amoxicillin', 'dependent_id': str(uuid.uuid4())},
-            format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('dependent_id', res.data['errors'])
-
-    def test_create_with_inactive_dependent_returns_400(self):
-        self.dependent.is_active = False
-        self.dependent.save(update_fields=['is_active'])
-        res = self.client.post(
-            MEDICATIONS_URL,
-            {'name': 'Amoxicillin', 'dependent_id': str(self.dependent.id)},
-            format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('dependent_id', res.data['errors'])
-
-    def test_patch_can_set_dependent(self):
-        medication = Medication.objects.create(patient=self._patient(), name='Metformin')
-        res = self.client.patch(
-            _detail_url(medication.id), {'dependent_id': str(self.dependent.id)}, format='json',
-        )
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        medication.refresh_from_db()
-        self.assertEqual(medication.dependent_id, self.dependent.id)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class MedicationListDetailTests(MedicationTestBase):
@@ -200,13 +83,20 @@ class MedicationListDetailTests(MedicationTestBase):
         res = self.client.get(_detail_url(self.active.id))
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_patch_updates_fields(self):
+    def test_patch_cannot_change_identity_fields(self):
+        # name/dosage/form/notes only ever come from the doctor's
+        # prescription — PATCH silently ignores them rather than erroring,
+        # same as any other unrecognized field.
         res = self.client.patch(
-            _detail_url(self.active.id), {'dosage': '50mg'}, format='json',
+            _detail_url(self.active.id),
+            {'name': 'Renamed', 'dosage': '999mg', 'form': 'liquid', 'notes': 'tampered'},
+            format='json',
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.active.refresh_from_db()
-        self.assertEqual(self.active.dosage, '50mg')
+        self.assertEqual(self.active.name, 'Active Med')
+        self.assertEqual(self.active.dosage, '')
+        self.assertEqual(self.active.notes, '')
 
     def test_patch_replaces_schedules_when_provided(self):
         MedicationSchedule.objects.create(medication=self.active, times=['08:00'], days_of_week=[])
@@ -219,6 +109,41 @@ class MedicationListDetailTests(MedicationTestBase):
         self.active.refresh_from_db()
         self.assertEqual(self.active.schedules.count(), 1)
         self.assertEqual(self.active.schedules.first().times, ['09:00'])
+
+    def test_patch_invalid_time_format_returns_400(self):
+        res = self.client.patch(
+            _detail_url(self.active.id),
+            {'schedules': [{'times': ['8:00'], 'days_of_week': []}]},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_without_schedules_leaves_existing_schedule_untouched(self):
+        MedicationSchedule.objects.create(medication=self.active, times=['08:00'], days_of_week=[])
+        res = self.client.patch(_detail_url(self.active.id), {}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.active.refresh_from_db()
+        self.assertEqual(self.active.schedules.count(), 1)
+        self.assertEqual(self.active.schedules.first().times, ['08:00'])
+
+    def test_patch_ignores_dependent_id(self):
+        dependent = Dependent.objects.create(
+            managed_by=self._patient(), first_name='Kid', last_name='Doe', relationship='child',
+        )
+        res = self.client.patch(
+            _detail_url(self.active.id), {'dependent_id': str(dependent.id)}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.active.refresh_from_db()
+        self.assertIsNone(self.active.dependent_id)
+
+    def test_patch_other_patients_medication_returns_404(self):
+        other_token = _register_and_login(self.client, patient_payload(email='other-patch@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+        res = self.client.patch(
+            _detail_url(self.active.id), {'schedules': []}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_delete_soft_deletes_not_hard_deletes(self):
         res = self.client.delete(_detail_url(self.active.id))

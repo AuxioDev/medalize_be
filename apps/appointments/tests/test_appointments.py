@@ -549,6 +549,29 @@ class DoctorAppointmentTests(AppointmentTestBase):
         )
         self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
 
+    def test_cannot_complete_appointment_before_start_time(self):
+        appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)  # starts_at is in the future
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'completed'}, format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
+        appt.refresh_from_db()
+        self.assertEqual(appt.status, Appointment.STATUS_CONFIRMED)
+
+    def test_can_complete_appointment_once_started(self):
+        past = timezone.now() - datetime.timedelta(minutes=5)
+        appt = self._make_appointment(
+            starts_at=past, ends_at=past + datetime.timedelta(minutes=30),
+            status=Appointment.STATUS_CONFIRMED,
+        )
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'completed'}, format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['status'], Appointment.STATUS_COMPLETED)
+
     def test_update_notes(self):
         appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)
         self.as_doctor()

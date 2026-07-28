@@ -3,7 +3,6 @@ import re
 from rest_framework import serializers
 
 from apps.family.serializers import DependentBriefSerializer
-from apps.family.services import resolve_dependent
 
 from .models import DoseLog, Medication, MedicationSchedule
 
@@ -53,47 +52,23 @@ class MedicationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'source', 'is_active', 'created_at', 'updated_at']
 
 
-class MedicationCreateSerializer(serializers.ModelSerializer):
-    """Used for both POST (create) and PATCH (update) — a writable-nested
-    ``schedules`` list. On update, providing ``schedules`` replaces the full
-    set for that medication (delete + recreate), matching how the mobile
-    add/edit screen re-submits the whole schedule builder at once.
-
-    ``dependent_id`` is optional and write-only: books this medication for
-    one of the patient's managed family members instead of the patient
-    themself. Resolved to the actual Dependent instance (or None) by
-    validate_dependent_id."""
+class MedicationScheduleUpdateSerializer(serializers.Serializer):
+    """The only patient-writable action on a Medication: replacing its
+    reminder schedule. A Medication's identity (name/dosage/form/notes) and
+    its ``dependent`` are set once at creation time by
+    PrescriptionApplyView.post — a Medication only ever exists because a
+    doctor prescribed it — and never editable afterwards, so those fields
+    aren't declared here and a client sending them has no effect. Providing
+    ``schedules`` replaces the full set for that medication (delete +
+    recreate), matching how the mobile edit screen re-submits the whole
+    schedule builder at once."""
 
     schedules = MedicationScheduleSerializer(many=True, required=False)
-    dependent_id = serializers.UUIDField(required=False, allow_null=True)
-
-    class Meta:
-        model = Medication
-        fields = ['name', 'dosage', 'form', 'notes', 'schedules', 'dependent_id']
-
-    def validate_dependent_id(self, value):
-        return resolve_dependent(self.context['request'].user, value)
-
-    def create(self, validated_data):
-        schedules_data = validated_data.pop('schedules', [])
-        dependent = validated_data.pop('dependent_id', None)
-        medication = Medication.objects.create(
-            patient=self.context['request'].user, dependent=dependent, **validated_data
-        )
-        for schedule_data in schedules_data:
-            MedicationSchedule.objects.create(medication=medication, **schedule_data)
-        return medication
 
     def update(self, instance, validated_data):
-        schedules_data = validated_data.pop('schedules', None)
-        if 'dependent_id' in validated_data:
-            instance.dependent = validated_data.pop('dependent_id')
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        if schedules_data is not None:
+        if 'schedules' in validated_data:
             instance.schedules.all().delete()
-            for schedule_data in schedules_data:
+            for schedule_data in validated_data['schedules']:
                 MedicationSchedule.objects.create(medication=instance, **schedule_data)
         return instance
 
