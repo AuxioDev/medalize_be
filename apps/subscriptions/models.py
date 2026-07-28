@@ -4,17 +4,29 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
-from .plans import PLAN_BASIC, PLAN_PRO
+from .plans import PLAN_BASIC, PLAN_HOSPITAL_BASIC, PLAN_HOSPITAL_PRO, PLAN_PRO
 
 
-class DoctorSubscription(models.Model):
-    """One row per doctor, created at registration (see signals.py) and
-    never deleted — it is the doctor's whole billing history in one place,
-    not a per-period record. ``plan`` deliberately survives past_due/expired
-    transitions: it is the LAST plan the doctor held (paid for, or was
-    trialing under), so a lapsed doctor's enforcement (see
-    apps.subscriptions.entitlements) degrades from their own tier rather
-    than resetting to the cheapest one."""
+class Subscription(models.Model):
+    """One row per billable account (doctor or hospital), created at
+    registration (see signals.py) and never deleted — it is that account's
+    whole billing history in one place, not a per-period record. ``plan``
+    deliberately survives past_due/expired transitions: it is the LAST plan
+    the account held (paid for, or was trialing under, for doctors), so a
+    lapsed account's enforcement (see apps.subscriptions.entitlements)
+    degrades from its own tier rather than resetting to the cheapest one.
+
+    Shared by both doctors and hospitals (see apps.subscriptions.plans —
+    TRIAL_ROLES, PLANS_FOR_ROLE, LIMITS_BY_ROLE) rather than split into two
+    models: they share one Payriff order-id space (see
+    apps.subscriptions.service.handle_webhook_ping and
+    apps.payments.service's fallback lookup) and one hourly sweep
+    (apps.subscriptions.tasks.sweep_subscriptions) — a second table would
+    duplicate both. Renamed from DoctorSubscription when hospital accounts
+    were added; ``related_name='subscription'`` kept unchanged so every
+    existing doctor-only call site (apps.appointments, apps.messaging,
+    apps.doctors, apps.assistant) is untouched.
+    """
 
     STATUS_PENDING = 'pending'
     STATUS_TRIALING = 'trialing'
@@ -33,6 +45,8 @@ class DoctorSubscription(models.Model):
         ('', 'None'),
         (PLAN_BASIC, 'Başlanğıc'),
         (PLAN_PRO, 'Peşəkar'),
+        (PLAN_HOSPITAL_BASIC, 'Klinika'),
+        (PLAN_HOSPITAL_PRO, 'Klinika Plus'),
     ]
 
     REMINDER_NONE = ''
@@ -49,7 +63,8 @@ class DoctorSubscription(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscription',
     )
-    plan = models.CharField(max_length=10, choices=PLAN_CHOICES, blank=True, default='')
+    # 20, not 10: 'hospital_basic' is 14 characters.
+    plan = models.CharField(max_length=20, choices=PLAN_CHOICES, blank=True, default='')
     # Indexed: every doctor-facing search/booking/ranking query filters or
     # orders on this, same reasoning as DoctorProfile.is_verified.
     status = models.CharField(
@@ -77,7 +92,7 @@ class DoctorSubscription(models.Model):
 
 
 class SubscriptionPayment(models.Model):
-    """One row per checkout attempt for a doctor subscription.
+    """One row per checkout attempt for a doctor or hospital subscription.
 
     Deliberately NOT apps.payments.Payment: that model's ``appointment``
     field is a non-nullable OneToOneField and its idempotency contract
@@ -99,9 +114,9 @@ class SubscriptionPayment(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(
-        DoctorSubscription, on_delete=models.CASCADE, related_name='subscription_payments',
+        Subscription, on_delete=models.CASCADE, related_name='subscription_payments',
     )
-    plan = models.CharField(max_length=10, choices=DoctorSubscription.PLAN_CHOICES)
+    plan = models.CharField(max_length=20, choices=Subscription.PLAN_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='AZN')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)

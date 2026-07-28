@@ -8,8 +8,8 @@ from apps.notifications.i18n import recipient_language
 from apps.payments.service import _return_url as _payriff_return_url
 from apps.payments.service import get_provider, payments_enabled
 
-from .models import DoctorSubscription, SubscriptionPayment
-from .plans import PERIOD_DAYS, PLAN_NAMES, PLAN_PRICES
+from .models import Subscription, SubscriptionPayment
+from .plans import PERIOD_DAYS, PLANS_FOR_ROLE, PLAN_NAMES, PLAN_PRICES
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 __all__ = ['create_subscription_checkout', 'handle_webhook_ping', 'payments_enabled']
 
 
-def create_subscription_checkout(doctor, plan):
+def create_subscription_checkout(user, plan):
     """Open a one-shot Payriff hosted-checkout order for a subscription
-    payment. Locks the doctor's DoctorSubscription row across the provider
+    payment. Locks the account's Subscription row across the provider
     call for the same reason apps.payments.service.get_or_create_payment
     locks the appointment row: to serialize a double-tap "Subscribe" into
     one provider order instead of two.
@@ -28,15 +28,25 @@ def create_subscription_checkout(doctor, plan):
     Unlike appointment payments there is no existing-pending-payment reuse
     here — each checkout attempt is its own SubscriptionPayment row, and
     only whichever one Payriff actually confirms paid ever changes the
-    subscription's state (see handle_webhook_ping)."""
+    subscription's state (see handle_webhook_ping).
+
+    Guards against a plan belonging to the wrong role — e.g. a hospital
+    account POSTing a doctor plan code — in addition to the serializer-level
+    ChoiceField restriction in each role's checkout view: both layers exist
+    on purpose (apps.hospitals.views / apps.subscriptions.views), since a
+    role-scoped serializer choice is easy to accidentally widen later
+    without anyone noticing this service function is the last line of
+    defense against selling doctor-priced entitlements to a hospital."""
     if plan not in PLAN_PRICES:
         raise ValueError(f'Unknown plan: {plan!r}')
+    if plan not in PLANS_FOR_ROLE.get(user.role, ()):
+        raise ValueError(f'Plan {plan!r} is not available for role {user.role!r}')
 
     with transaction.atomic():
-        subscription = DoctorSubscription.objects.select_for_update().get(user=doctor)
+        subscription = Subscription.objects.select_for_update().get(user=user)
 
         amount = PLAN_PRICES[plan]
-        lang = recipient_language(doctor)
+        lang = recipient_language(user)
         provider = get_provider()
         order = provider.create_order(
             amount=amount,
@@ -116,10 +126,10 @@ def handle_webhook_ping(provider_order_id):
 def _activate_subscription(payment):
     """Extends the subscription period from whichever is later: the current
     period end (a renewal paid before expiry) or now (a lapsed/first-time
-    subscriber) — so paying early never shortens what a doctor already has,
-    and paying late never backdates the new period into the past."""
+    subscriber) — so paying early never shortens what the account already
+    has, and paying late never backdates the new period into the past."""
     with transaction.atomic():
-        subscription = DoctorSubscription.objects.select_for_update().get(pk=payment.subscription_id)
+        subscription = Subscription.objects.select_for_update().get(pk=payment.subscription_id)
         now = timezone.now()
         base = (
             subscription.current_period_end
@@ -127,10 +137,10 @@ def _activate_subscription(payment):
             else now
         )
         subscription.plan = payment.plan
-        subscription.status = DoctorSubscription.STATUS_ACTIVE
+        subscription.status = Subscription.STATUS_ACTIVE
         subscription.current_period_end = base + timedelta(days=PERIOD_DAYS)
         subscription.grace_ends_at = None
-        subscription.last_reminder_stage = DoctorSubscription.REMINDER_NONE
+        subscription.last_reminder_stage = Subscription.REMINDER_NONE
         subscription.save()
 
     try:
@@ -138,6 +148,6 @@ def _activate_subscription(payment):
         send_subscription_notification.delay(str(subscription.user_id), 'subscription_activated')
     except Exception:
         logger.exception(
-            'Failed to enqueue subscription-activated notification for doctor %s',
+            'Failed to enqueue subscription-activated notification for account %s',
             subscription.user_id,
         )

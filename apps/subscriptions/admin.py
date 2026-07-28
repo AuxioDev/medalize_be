@@ -1,10 +1,10 @@
 from django.contrib import admin
 
-from .models import DoctorSubscription, SubscriptionPayment
+from .models import Subscription, SubscriptionPayment
 
 
-@admin.register(DoctorSubscription)
-class DoctorSubscriptionAdmin(admin.ModelAdmin):
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
     list_display = ['user', 'plan', 'status', 'trial_ends_at', 'current_period_end', 'grace_ends_at']
     list_filter = ['status', 'plan']
     search_fields = ['user__email']

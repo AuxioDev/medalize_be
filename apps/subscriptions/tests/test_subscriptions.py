@@ -15,7 +15,7 @@ from apps.appointments.tests.test_appointments import (
 from apps.doctors.models import Workplace
 from apps.messaging.models import Thread
 from apps.payments.providers.base import ProviderOrder
-from apps.subscriptions.models import DoctorSubscription, SubscriptionPayment
+from apps.subscriptions.models import Subscription, SubscriptionPayment
 from apps.subscriptions.plans import GRACE_DAYS, PLAN_BASIC, PLAN_PRO, TRIAL_DAYS
 from apps.subscriptions.tasks import sweep_subscriptions
 
@@ -50,8 +50,8 @@ class TrialStartTests(AppointmentTestBase):
     exactly the transition this app hooks into."""
 
     def test_verification_starts_trial(self):
-        sub = DoctorSubscription.objects.get(user=self.doctor)
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_TRIALING)
+        sub = Subscription.objects.get(user=self.doctor)
+        self.assertEqual(sub.status, Subscription.STATUS_TRIALING)
         self.assertIsNotNone(sub.trial_ends_at)
         expected = timezone.now() + datetime.timedelta(days=TRIAL_DAYS)
         self.assertLess(abs((sub.trial_ends_at - expected).total_seconds()), 5)
@@ -60,12 +60,12 @@ class TrialStartTests(AppointmentTestBase):
         token = _register_and_login(self.client, doctor_payload(email='fresh@test.com'))
         from apps.users.models import User
         fresh = User.objects.get(email='fresh@test.com')
-        sub = DoctorSubscription.objects.get(user=fresh)
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_PENDING)
+        sub = Subscription.objects.get(user=fresh)
+        self.assertEqual(sub.status, Subscription.STATUS_PENDING)
         self.assertIsNone(sub.trial_ends_at)
 
     def test_reverifying_an_already_trialing_doctor_does_not_restart_trial(self):
-        sub = DoctorSubscription.objects.get(user=self.doctor)
+        sub = Subscription.objects.get(user=self.doctor)
         original_trial_end = sub.trial_ends_at
 
         self.doctor.doctor_profile.is_verified = False
@@ -74,13 +74,13 @@ class TrialStartTests(AppointmentTestBase):
         self.doctor.doctor_profile.save(update_fields=['is_verified'])
 
         sub.refresh_from_db()
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_TRIALING)
+        self.assertEqual(sub.status, Subscription.STATUS_TRIALING)
         self.assertEqual(sub.trial_ends_at, original_trial_end)
 
 
 class SweepTransitionTests(AppointmentTestBase):
     def _sub(self):
-        return DoctorSubscription.objects.get(user=self.doctor)
+        return Subscription.objects.get(user=self.doctor)
 
     def test_trial_past_deadline_becomes_past_due_with_grace_window(self):
         sub = self._sub()
@@ -90,13 +90,13 @@ class SweepTransitionTests(AppointmentTestBase):
         sweep_subscriptions()
 
         sub.refresh_from_db()
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_PAST_DUE)
+        self.assertEqual(sub.status, Subscription.STATUS_PAST_DUE)
         expected_grace = timezone.now() + datetime.timedelta(days=GRACE_DAYS)
         self.assertLess(abs((sub.grace_ends_at - expected_grace).total_seconds()), 5)
 
     def test_active_past_period_end_becomes_past_due(self):
         sub = self._sub()
-        sub.status = DoctorSubscription.STATUS_ACTIVE
+        sub.status = Subscription.STATUS_ACTIVE
         sub.plan = PLAN_PRO
         sub.current_period_end = timezone.now() - datetime.timedelta(hours=1)
         sub.save(update_fields=['status', 'plan', 'current_period_end'])
@@ -104,19 +104,19 @@ class SweepTransitionTests(AppointmentTestBase):
         sweep_subscriptions()
 
         sub.refresh_from_db()
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_PAST_DUE)
+        self.assertEqual(sub.status, Subscription.STATUS_PAST_DUE)
         self.assertEqual(sub.plan, PLAN_PRO)  # plan is retained through past_due
 
     def test_past_due_after_grace_becomes_expired(self):
         sub = self._sub()
-        sub.status = DoctorSubscription.STATUS_PAST_DUE
+        sub.status = Subscription.STATUS_PAST_DUE
         sub.grace_ends_at = timezone.now() - datetime.timedelta(hours=1)
         sub.save(update_fields=['status', 'grace_ends_at'])
 
         sweep_subscriptions()
 
         sub.refresh_from_db()
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_EXPIRED)
+        self.assertEqual(sub.status, Subscription.STATUS_EXPIRED)
 
     def test_trial_ending_reminder_sent_once(self):
         sub = self._sub()
@@ -125,19 +125,19 @@ class SweepTransitionTests(AppointmentTestBase):
 
         sweep_subscriptions()
         sub.refresh_from_db()
-        self.assertEqual(sub.last_reminder_stage, DoctorSubscription.REMINDER_T1)
+        self.assertEqual(sub.last_reminder_stage, Subscription.REMINDER_T1)
 
         # A second sweep in the same window must not re-stage/re-send.
         sweep_subscriptions()
         sub.refresh_from_db()
-        self.assertEqual(sub.last_reminder_stage, DoctorSubscription.REMINDER_T1)
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_TRIALING)
+        self.assertEqual(sub.last_reminder_stage, Subscription.REMINDER_T1)
+        self.assertEqual(sub.status, Subscription.STATUS_TRIALING)
 
 
 class EntitlementVisibilityTests(AppointmentTestBase):
     def _expire(self):
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_EXPIRED,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_EXPIRED,
         )
 
     def test_expired_doctor_hidden_from_list(self):
@@ -157,8 +157,8 @@ class EntitlementVisibilityTests(AppointmentTestBase):
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_past_due_doctor_still_visible(self):
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_PAST_DUE,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_PAST_DUE,
             grace_ends_at=timezone.now() + datetime.timedelta(days=GRACE_DAYS),
         )
         self.as_patient()
@@ -190,8 +190,8 @@ class PromotedRankingTests(AppointmentTestBase):
         self.basic_doctor = User.objects.get(email='basic-doctor@test.com')
         self.basic_doctor.doctor_profile.is_verified = True
         self.basic_doctor.doctor_profile.save(update_fields=['is_verified'])
-        DoctorSubscription.objects.filter(user=self.basic_doctor).update(
-            status=DoctorSubscription.STATUS_ACTIVE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.basic_doctor).update(
+            status=Subscription.STATUS_ACTIVE, plan=PLAN_BASIC,
             current_period_end=timezone.now() + datetime.timedelta(days=30),
         )
         Workplace.objects.create(
@@ -210,7 +210,7 @@ class PromotedRankingTests(AppointmentTestBase):
         self.assertEqual(names, ['John', 'Zzz'])
 
     def test_promoted_doctor_ranks_first_even_when_alphabetically_last(self):
-        DoctorSubscription.objects.filter(user=self.doctor).update(plan='')  # still trialing
+        Subscription.objects.filter(user=self.doctor).update(plan='')  # still trialing
         self.doctor.first_name = 'Zzzoctor'
         self.doctor.save(update_fields=['first_name'])
         self.basic_doctor.first_name = 'Aaadoctor'
@@ -231,8 +231,8 @@ class PromotedRankingTests(AppointmentTestBase):
 
 class WorkplaceLimitTests(AppointmentTestBase):
     def test_basic_plan_limited_to_one_workplace(self):
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_ACTIVE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_ACTIVE, plan=PLAN_BASIC,
             current_period_end=timezone.now() + datetime.timedelta(days=30),
         )
         self.as_doctor()
@@ -255,8 +255,8 @@ class WorkplaceLimitTests(AppointmentTestBase):
             self.client.post(WORKPLACES_URL, workplace_payload(name=f'Clinic {i}'), format='json')
         self.assertEqual(Workplace.objects.filter(doctor=self.doctor).count(), 5)
 
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_ACTIVE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_ACTIVE, plan=PLAN_BASIC,
             current_period_end=timezone.now() + datetime.timedelta(days=30),
         )
         self.assertEqual(Workplace.objects.filter(doctor=self.doctor).count(), 5)
@@ -267,8 +267,8 @@ class WorkplaceLimitTests(AppointmentTestBase):
 class AppointmentMonthlyLimitTests(AppointmentTestBase):
     def setUp(self):
         super().setUp()
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_ACTIVE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_ACTIVE, plan=PLAN_BASIC,
             current_period_end=timezone.now() + datetime.timedelta(days=30),
         )
 
@@ -316,8 +316,8 @@ class ChatGateTests(AppointmentTestBase):
         return self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
 
     def test_basic_plan_blocks_new_thread(self):
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_ACTIVE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_ACTIVE, plan=PLAN_BASIC,
             current_period_end=timezone.now() + datetime.timedelta(days=30),
         )
         res = self._open_thread_as_patient()
@@ -329,8 +329,8 @@ class ChatGateTests(AppointmentTestBase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         thread_id = res.data['id']
 
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_ACTIVE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_ACTIVE, plan=PLAN_BASIC,
             current_period_end=timezone.now() + datetime.timedelta(days=30),
         )
         res = self._open_thread_as_patient()
@@ -347,8 +347,8 @@ class StatsPayloadTests(AppointmentTestBase):
     STATS_URL = '/api/doctor/stats/'
 
     def test_basic_plan_gets_reduced_payload(self):
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_ACTIVE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_ACTIVE, plan=PLAN_BASIC,
             current_period_end=timezone.now() + datetime.timedelta(days=30),
         )
         self.as_doctor()
@@ -400,15 +400,15 @@ class CheckoutAndWebhookTests(AppointmentTestBase):
             res = self.client.post(WEBHOOK_URL, {'transactionId': 'sub-2'}, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-        sub = DoctorSubscription.objects.get(user=self.doctor)
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_ACTIVE)
+        sub = Subscription.objects.get(user=self.doctor)
+        self.assertEqual(sub.status, Subscription.STATUS_ACTIVE)
         self.assertEqual(sub.plan, PLAN_BASIC)
         self.assertIsNotNone(sub.current_period_end)
 
     def test_renewal_extends_from_future_period_end_not_from_now(self):
         future_end = timezone.now() + datetime.timedelta(days=10)
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_ACTIVE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_ACTIVE, plan=PLAN_BASIC,
             current_period_end=future_end,
         )
         with patch(CREATE_PATCH, return_value=fake_order('sub-3')):
@@ -418,13 +418,13 @@ class CheckoutAndWebhookTests(AppointmentTestBase):
         with patch(STATUS_PATCH, return_value=SubscriptionPayment.STATUS_PAID):
             self.client.post(WEBHOOK_URL, {'transactionId': 'sub-3'}, format='json')
 
-        sub = DoctorSubscription.objects.get(user=self.doctor)
+        sub = Subscription.objects.get(user=self.doctor)
         expected = future_end + datetime.timedelta(days=30)
         self.assertLess(abs((sub.current_period_end - expected).total_seconds()), 5)
 
     def test_lapsed_period_renews_from_now_not_from_the_past(self):
-        DoctorSubscription.objects.filter(user=self.doctor).update(
-            status=DoctorSubscription.STATUS_PAST_DUE, plan=PLAN_BASIC,
+        Subscription.objects.filter(user=self.doctor).update(
+            status=Subscription.STATUS_PAST_DUE, plan=PLAN_BASIC,
             current_period_end=timezone.now() - datetime.timedelta(days=5),
             grace_ends_at=timezone.now() + datetime.timedelta(days=GRACE_DAYS),
         )
@@ -435,10 +435,10 @@ class CheckoutAndWebhookTests(AppointmentTestBase):
         with patch(STATUS_PATCH, return_value=SubscriptionPayment.STATUS_PAID):
             self.client.post(WEBHOOK_URL, {'transactionId': 'sub-4'}, format='json')
 
-        sub = DoctorSubscription.objects.get(user=self.doctor)
+        sub = Subscription.objects.get(user=self.doctor)
         expected = timezone.now() + datetime.timedelta(days=30)
         self.assertLess(abs((sub.current_period_end - expected).total_seconds()), 5)
-        self.assertEqual(sub.status, DoctorSubscription.STATUS_ACTIVE)
+        self.assertEqual(sub.status, Subscription.STATUS_ACTIVE)
 
     def test_appointment_payment_webhook_still_resolves_to_payment_not_subscription(self):
         # Regression guard for the shared-webhook routing change in
@@ -469,7 +469,7 @@ class SubscriptionStatusEndpointTests(AppointmentTestBase):
         self.as_doctor()
         res = self.client.get(SUBSCRIPTION_URL)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data['status'], DoctorSubscription.STATUS_TRIALING)
+        self.assertEqual(res.data['status'], Subscription.STATUS_TRIALING)
         self.assertEqual(res.data['effective_plan'], 'trial')
         self.assertTrue(res.data['limits']['chat'])
         self.assertIn('usage', res.data)
@@ -496,7 +496,7 @@ class LoginPayloadTests(AppointmentTestBase):
         }, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn('subscription', res.data)
-        self.assertEqual(res.data['subscription']['status'], DoctorSubscription.STATUS_TRIALING)
+        self.assertEqual(res.data['subscription']['status'], Subscription.STATUS_TRIALING)
 
     def test_me_endpoint_includes_subscription_block(self):
         self.as_doctor()
