@@ -33,12 +33,21 @@ _AZ_TRANSLIT = str.maketrans({
 })
 
 
-def _normalize(raw):
-    """Casefold + strip Azerbaijani diacritics so free-text city values
-    ('Bakı', 'BAKI', 'Baku') all collapse to the same lookup key."""
+def normalize_text(raw):
+    """Casefold + strip Azerbaijani diacritics so free-text values ('Bakı',
+    'BAKI', 'Baku') all collapse to the same lookup key. Originally private
+    to this module's own city lookup; made public because
+    apps.hospitals.matching reuses the exact same diacritic-folding logic to
+    match a doctor-typed hospital name against the registry before falling
+    back to creating a new entry."""
     text = raw.translate(_AZ_TRANSLIT).casefold().strip()
     text = unicodedata.normalize('NFKD', text)
     return ''.join(ch for ch in text if not unicodedata.combining(ch))
+
+
+# Kept for any pre-existing internal call sites within this module — public
+# name above is the one other apps should import.
+_normalize = normalize_text
 
 
 # key -> set of normalized strings that should resolve to it (built once).

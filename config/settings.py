@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'apps.core',
     'apps.family',
     'apps.doctors',
+    'apps.hospitals',
     'apps.appointments',
     'apps.notifications',
     'apps.assistant',
@@ -196,6 +197,11 @@ REST_FRAMEWORK = {
         # costly to leave uncapped (each call is a real API round-trip to
         # the payment provider).
         'subscription_checkout': '10/hour',
+        # The only user-submitted-content endpoint in the app (POST
+        # /api/hospitals/, a doctor's "add your variant" when their hospital
+        # isn't in the registry) — new rows are immediately visible to every
+        # other doctor, so this is capped tighter than most write actions.
+        'hospital_create': '5/hour',
     },
 }
 
