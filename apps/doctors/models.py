@@ -21,6 +21,22 @@ class Workplace(models.Model):
         on_delete=models.CASCADE,
         related_name='workplaces',
     )
+    # Optional link to a registry entry in apps.hospitals — set when the
+    # doctor picked (or added) a hospital from the picker rather than typing
+    # a private-practice name freehand. SET_NULL, not PROTECT/CASCADE:
+    # deleting a junk registry entry (an admin rejecting a bad "add your
+    # variant" submission) must leave this workplace fully functional on its
+    # own free-text `name`, never delete or orphan it — the hospital
+    # relationship is allowed to disappear, the workplace itself is not. The
+    # doctor<->hospital *affiliation* state (pending/confirmed/rejected)
+    # lives separately on apps.hospitals.models.HospitalDoctorLink, not
+    # here — see that model's docstring for why.
+    hospital = models.ForeignKey(
+        'hospitals.Hospital',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='workplaces',
+    )
     name = models.CharField(max_length=200)
     address = models.CharField(max_length=500)
     # Canonical key into apps.core.i18n.locations.json, not free text.
