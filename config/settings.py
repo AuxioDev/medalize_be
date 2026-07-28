@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'apps.records',
     'apps.messaging',
     'apps.payments',
+    'apps.subscriptions',
 ]
 
 MIDDLEWARE = [
@@ -191,6 +192,10 @@ REST_FRAMEWORK = {
         # backend; this per-user cap keeps us well under that even if
         # several doctors edit workplaces at once.
         'reverse_geocode': '20/minute',
+        # Opens a Payriff hosted-checkout order per call — cheap to abuse,
+        # costly to leave uncapped (each call is a real API round-trip to
+        # the payment provider).
+        'subscription_checkout': '10/hour',
     },
 }
 
@@ -274,6 +279,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.assistant.tasks.delete_expired_conversations',
         # 90-day TTL cleanup; unlike the 30-minute jobs above, once a day is enough.
         'schedule': timedelta(hours=24),
+    },
+    'sweep-subscriptions': {
+        'task': 'apps.subscriptions.tasks.sweep_subscriptions',
+        'schedule': timedelta(hours=1),
     },
 }
 

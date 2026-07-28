@@ -110,6 +110,7 @@ def search_doctors(specialization, city=None, lang='en'):
     """Top-5 verified doctors for a specialization (optionally in a city),
     ordered by average review rating. Deliberately a narrow standalone query —
     do not reuse/refactor DoctorListView for this."""
+    from apps.subscriptions.entitlements import entitled_doctor_filter
     from apps.users.models import User
 
     qs = (
@@ -119,6 +120,7 @@ def search_doctors(specialization, city=None, lang='en'):
             doctor_profile__is_verified=True,
             doctor_profile__specialization=specialization,
         )
+        .filter(**entitled_doctor_filter())
         .select_related('doctor_profile')
         .prefetch_related('workplaces')
         .annotate(

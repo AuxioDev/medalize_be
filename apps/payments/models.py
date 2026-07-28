@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 class Payment(models.Model):
@@ -63,6 +64,17 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            # Excludes blank: many rows legitimately carry '' (any row not
+            # yet round-tripped through get_or_create_payment). Without
+            # `condition`, a plain unique index would reject the second such
+            # row outright.
+            models.UniqueConstraint(
+                fields=['provider_order_id'],
+                condition=~Q(provider_order_id=''),
+                name='payment_unique_provider_order_id',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.patient} → Dr.{self.doctor}: {self.amount} {self.currency} ({self.status})'

@@ -10,12 +10,13 @@ logger = logging.getLogger(__name__)
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.uploads import randomize_upload_filename
+from apps.subscriptions.entitlements import limits_for
 from apps.users.models import DoctorProfile
 from apps.users.permissions import IsDoctor, IsDoctorVerified
 
@@ -147,6 +148,14 @@ class WorkplaceListCreateView(APIView):
         )
 
     def post(self, request):
+        workplace_limit = limits_for(request.user)['workplaces']
+        if Workplace.objects.filter(doctor=request.user).count() >= workplace_limit:
+            raise PermissionDenied({
+                'code': 'plan_limit_reached',
+                'resource': 'workplaces',
+                'limit': workplace_limit,
+            })
+
         serializer = WorkplaceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

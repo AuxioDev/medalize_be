@@ -9,6 +9,8 @@ from rest_framework_simplejwt.settings import api_settings
 from django.contrib.auth.models import update_last_login
 
 from apps.core.i18n import city_label, city_region, region_label
+from apps.subscriptions.entitlements import subscription_summary
+from apps.subscriptions.models import DoctorSubscription
 
 from .i18n import specialization_label, viewer_language
 from .models import DoctorProfile, EmailChangeRequest, PatientProfile, PasswordResetOTP, UserDevice
@@ -57,6 +59,11 @@ def build_login_payload(user, remember_me=False):
         except DoctorProfile.DoesNotExist:
             data['onboarding_complete'] = False
             data['is_verified'] = False
+        try:
+            subscription = user.subscription
+        except DoctorSubscription.DoesNotExist:
+            subscription = None
+        data['subscription'] = subscription_summary(subscription)
     else:
         data['onboarding_complete'] = True
         data['is_verified'] = None
@@ -207,6 +214,11 @@ class MeSerializer(serializers.ModelSerializer):
                 data['onboarding_step'] = 1
                 data['onboarding_complete'] = False
                 data['profile'] = {}
+            try:
+                subscription = instance.subscription
+            except DoctorSubscription.DoesNotExist:
+                subscription = None
+            data['subscription'] = subscription_summary(subscription)
         else:
             try:
                 profile = instance.patient_profile

@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.appointments.models import Appointment
+from apps.subscriptions.entitlements import limits_for
 from apps.users.models import User
 
 from .models import Message, Thread
@@ -106,7 +107,16 @@ class ThreadListCreateView(APIView):
                 'detail': 'You need a shared appointment history to message this user.',
             })
 
-        thread, created = Thread.objects.get_or_create(patient=patient, doctor=doctor)
+        thread = Thread.objects.filter(patient=patient, doctor=doctor).first()
+        created = thread is None
+        if created:
+            # Gate only opening a brand-new thread — a doctor whose plan has
+            # since dropped chat (Başlanğıc, or a lapsed/expired
+            # subscription) keeps every conversation they already have.
+            if not limits_for(doctor)['chat']:
+                raise PermissionDenied({'code': 'chat_unavailable'})
+            thread = Thread.objects.create(patient=patient, doctor=doctor)
+
         return Response(
             ThreadSerializer(thread, context={'request': request}).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,

@@ -23,12 +23,14 @@ class Notification(models.Model):
     TYPE_CANCELLED = 'booking_cancelled'
     TYPE_RESCHEDULING = 'rescheduling_required'
     TYPE_GENERAL = 'general'
+    TYPE_SUBSCRIPTION = 'subscription'
     TYPE_CHOICES = [
         (TYPE_REMINDER, 'Appointment Reminder'),
         (TYPE_CONFIRMED, 'Booking Confirmed'),
         (TYPE_CANCELLED, 'Booking Cancelled'),
         (TYPE_RESCHEDULING, 'Rescheduling Required'),
         (TYPE_GENERAL, 'General'),
+        (TYPE_SUBSCRIPTION, 'Subscription'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

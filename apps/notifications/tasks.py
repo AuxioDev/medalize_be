@@ -611,6 +611,33 @@ def auto_complete_past_appointments():
 
 
 @shared_task
+def send_subscription_notification(user_id, template_key):
+    """Shared by every doctor-subscription lifecycle event
+    (apps.subscriptions.tasks.sweep_subscriptions and
+    apps.subscriptions.service._activate_subscription) — template_key is one
+    of trial_ending, trial_ended, subscription_expiring, subscription_expired,
+    subscription_activated, all defined in templates.json with no
+    interpolated fields, so a single generic task covers all five instead of
+    one @shared_task per event."""
+    from apps.users.models import User
+    from .models import Notification
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return
+
+    tpl = render_template(template_key, recipient_language(user))
+    Notification.objects.create(
+        user=user,
+        type=Notification.TYPE_SUBSCRIPTION,
+        title=tpl['title'],
+        message=tpl['body'],
+    )
+    _send_email(tpl['subject'], tpl['body'], user)
+    _send_push(user, tpl['title'], tpl['body'], data={'type': 'subscription'})
+
+
+@shared_task
 def expire_stale_pending_appointments():
     """Decline appointments still pending past their start time (the doctor never
     confirmed or declined). Prevents them lingering forever and frees the slot."""

@@ -11,6 +11,7 @@ from apps.core.i18n import city_label, region_label
 from apps.doctors.models import BlockedPeriod, WorkingHours, Workplace
 from apps.family.serializers import DependentBriefSerializer
 from apps.family.services import resolve_dependent
+from apps.subscriptions.entitlements import entitled_doctor_filter, is_promoted, limits_for
 from apps.users.i18n import specialization_label, viewer_language
 from .models import Appointment, CANCELLATION_WINDOW_HOURS, REVIEW_EDIT_WINDOW_DAYS, Review
 
@@ -155,8 +156,9 @@ class BookingSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         try:
-            doctor = User.objects.select_related('doctor_profile').get(
-                pk=attrs['doctor_id'], role='doctor', is_active=True, doctor_profile__is_verified=True
+            doctor = User.objects.select_related('doctor_profile', 'subscription').get(
+                pk=attrs['doctor_id'], role='doctor', is_active=True, doctor_profile__is_verified=True,
+                **entitled_doctor_filter(),
             )
         except User.DoesNotExist:
             raise serializers.ValidationError({'doctor_id': 'Doctor not found.'})
@@ -218,6 +220,25 @@ class BookingSerializer(serializers.Serializer):
 
         if overlap.exists():
             raise serializers.ValidationError({'starts_at': 'This slot is no longer available.'})
+
+        # Monthly booking cap (Başlanğıc tier only — see
+        # apps.subscriptions.plans.PLAN_LIMITS['appointments_per_month']).
+        # Deliberately reuses the exact overlap-slot wording above rather
+        # than a distinct error: the patient has no reason to learn a
+        # doctor's billing state, only that this particular booking can't
+        # go through.
+        monthly_cap = limits_for(doctor)['appointments_per_month']
+        if monthly_cap is not None:
+            local_start = timezone.localtime(starts_at)
+            month_start = local_start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            next_month_start = (month_start + timedelta(days=32)).replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0,
+            )
+            booked_this_month = Appointment.objects.filter(
+                doctor=doctor, starts_at__gte=month_start, starts_at__lt=next_month_start,
+            ).exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED]).count()
+            if booked_this_month >= monthly_cap:
+                raise serializers.ValidationError({'starts_at': 'This slot is no longer available.'})
 
         attrs['_doctor'] = doctor
         attrs['_workplace'] = workplace
@@ -329,6 +350,7 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
     next_slot_at = serializers.SerializerMethodField()
     distance_km = serializers.SerializerMethodField()
+    is_promoted = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -337,7 +359,7 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
             'specialization', 'specialization_display',
             'slot_duration_min', 'consultation_fee', 'primary_workplace',
             'average_rating', 'review_count', 'avatar_url',
-            'next_slot_at', 'distance_km',
+            'next_slot_at', 'distance_km', 'is_promoted',
         ]
 
     def get_specialization(self, obj):
@@ -418,6 +440,9 @@ class DoctorPublicSerializer(serializers.ModelSerializer):
         # Only annotated when lat/lng were sent with the request.
         value = getattr(obj, 'distance_km', None)
         return round(float(value), 1) if value is not None else None
+
+    def get_is_promoted(self, obj):
+        return is_promoted(obj)
 
 
 class DoctorDetailSerializer(DoctorPublicSerializer):

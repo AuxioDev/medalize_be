@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 from apps.core.i18n import resolve_city_key
 from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
+from apps.subscriptions.entitlements import entitled_doctor_filter, limits_for, promoted_rank_case
 from apps.users.permissions import IsDoctor, IsPatient
 from .models import Appointment, CANCELLATION_WINDOW_HOURS, Favorite, Review, Waitlist
 from .serializers import (
@@ -139,13 +140,15 @@ class DoctorListView(APIView):
         qs = (
             User.objects
             .filter(role=User.ROLE_DOCTOR, is_active=True, doctor_profile__is_verified=True)
-            .select_related('doctor_profile')
+            .filter(**entitled_doctor_filter())
+            .select_related('doctor_profile', 'subscription')
             .prefetch_related('workplaces')
             .annotate(
                 avg_rating=Avg('doctor_reviews__rating'),
                 total_reviews=Count('doctor_reviews', distinct=True),
+                promo_rank=promoted_rank_case(),
             )
-            .order_by('first_name', 'last_name', 'id')
+            .order_by('promo_rank', 'first_name', 'last_name', 'id')
         )
         name = request.query_params.get('name', '').strip()
         specialization = request.query_params.get('specialization', '').strip()
@@ -180,10 +183,10 @@ class DoctorListView(APIView):
 
         if ordering in ('rating', '-rating'):
             direction = F('avg_rating').desc if ordering == '-rating' else F('avg_rating').asc
-            qs = qs.order_by(direction(nulls_last=True), 'first_name', 'last_name', 'id')
+            qs = qs.order_by('promo_rank', direction(nulls_last=True), 'first_name', 'last_name', 'id')
         elif ordering == 'distance':
             qs = qs.order_by(
-                F('distance_km').asc(nulls_last=True), 'first_name', 'last_name', 'id'
+                'promo_rank', F('distance_km').asc(nulls_last=True), 'first_name', 'last_name', 'id'
             )
 
         paginator = PageNumberPagination()
@@ -256,7 +259,8 @@ class DoctorDetailView(APIView):
             doctor = (
                 User.objects
                 .filter(role='doctor', is_active=True, doctor_profile__is_verified=True)
-                .select_related('doctor_profile')
+                .filter(**entitled_doctor_filter())
+                .select_related('doctor_profile', 'subscription')
                 .prefetch_related('workplaces__working_hours')
                 .get(pk=pk)
             )
@@ -284,7 +288,8 @@ class SlotListView(APIView):
 
         try:
             doctor = User.objects.select_related('doctor_profile').get(
-                pk=pk, role='doctor', is_active=True, doctor_profile__is_verified=True
+                pk=pk, role='doctor', is_active=True, doctor_profile__is_verified=True,
+                **entitled_doctor_filter(),
             )
         except User.DoesNotExist:
             raise NotFound()
@@ -511,7 +516,8 @@ class DoctorNextSlotView(APIView):
     def get(self, request, pk):
         try:
             doctor = User.objects.select_related('doctor_profile').get(
-                pk=pk, role='doctor', is_active=True, doctor_profile__is_verified=True
+                pk=pk, role='doctor', is_active=True, doctor_profile__is_verified=True,
+                **entitled_doctor_filter(),
             )
         except User.DoesNotExist:
             raise NotFound()
@@ -932,7 +938,7 @@ class FavoriteListCreateView(APIView):
         doctors = (
             User.objects
             .filter(role=User.ROLE_DOCTOR, favorited_by__patient=request.user)
-            .select_related('doctor_profile')
+            .select_related('doctor_profile', 'subscription')
             .prefetch_related('workplaces')
             .annotate(
                 avg_rating=Avg('doctor_reviews__rating'),
@@ -1002,10 +1008,16 @@ class DoctorStatsView(APIView):
         confirmed_count = decided.filter(status=Appointment.STATUS_CONFIRMED).count()
         acceptance_rate = round(confirmed_count / decided_count * 100) if decided_count else None
 
-        return Response({
+        data = {
             'appointments_this_month': this_month,
-            'appointments_last_month': last_month,
             'pending_count': pending,
-            'total_patients': total_patients,
-            'acceptance_rate': acceptance_rate,
-        })
+        }
+        # Başlanğıc gets the two numbers above only; the rest is a Peşəkar/
+        # trial perk (see apps.subscriptions.plans.PLAN_LIMITS['advanced_stats']).
+        if limits_for(request.user)['advanced_stats']:
+            data.update({
+                'appointments_last_month': last_month,
+                'total_patients': total_patients,
+                'acceptance_rate': acceptance_rate,
+            })
+        return Response(data)

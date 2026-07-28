@@ -141,9 +141,20 @@ def handle_webhook_ping(provider_order_id):
         payment = Payment.objects.select_related('doctor', 'patient').get(
             provider_order_id=provider_order_id,
         )
-    except Payment.DoesNotExist:
-        logger.warning('Payriff webhook ping for unknown provider_order_id=%s', provider_order_id)
+    except Payment.MultipleObjectsReturned:
+        # Should be unreachable — provider_order_id carries a partial unique
+        # constraint (see Payment.Meta) — but this is the one exception type
+        # the original code left uncaught: it used to fall through to the
+        # view's blanket `except Exception`, log, and answer 200, silently
+        # never marking the payment paid. Fail loud in the logs instead.
+        logger.error('Multiple Payment rows share provider_order_id=%s', provider_order_id)
         return None
+    except Payment.DoesNotExist:
+        # Appointment payments and doctor-subscription payments share one
+        # Payriff merchant and therefore one order-id space — a miss here
+        # means the order belongs to a subscription checkout instead.
+        from apps.subscriptions.service import handle_webhook_ping as handle_subscription_webhook_ping
+        return handle_subscription_webhook_ping(provider_order_id)
 
     provider = get_provider()
     try:

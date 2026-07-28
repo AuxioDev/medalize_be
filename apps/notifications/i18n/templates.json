@@ -646,5 +646,165 @@
       "title": "已收到付款",
       "body": "您为与 {doctor_name} 医生的预约支付的 {amount} {currency} 已成功完成。"
     }
+  },
+  "trial_ending": {
+    "en": {
+      "subject": "Your Trial Is Ending Soon — Medalize",
+      "title": "Trial Ending Soon",
+      "body": "Your free 7-day trial is ending soon. Subscribe now to keep your profile visible to patients without interruption."
+    },
+    "ru": {
+      "subject": "Ваш пробный период скоро закончится — Medalize",
+      "title": "Пробный период скоро закончится",
+      "body": "Ваш бесплатный 7-дневный пробный период скоро закончится. Оформите подписку, чтобы ваш профиль оставался видимым для пациентов без перерыва."
+    },
+    "az": {
+      "subject": "Sınaq müddətiniz bitir — Medalize",
+      "title": "Sınaq müddəti bitir",
+      "body": "Pulsuz 7 günlük sınaq müddətiniz tezliklə başa çatır. Profilinizin pasiyentlər üçün fasiləsiz görünməsi üçün indi abunə olun."
+    },
+    "tr": {
+      "subject": "Deneme Süreniz Yakında Sona Eriyor — Medalize",
+      "title": "Deneme Süresi Sona Eriyor",
+      "body": "Ücretsiz 7 günlük deneme süreniz yakında sona eriyor. Profilinizin hastalar tarafından kesintisiz görünmeye devam etmesi için hemen abone olun."
+    },
+    "fr": {
+      "subject": "Votre essai gratuit se termine bientôt — Medalize",
+      "title": "Fin de l'essai gratuit",
+      "body": "Votre essai gratuit de 7 jours se termine bientôt. Abonnez-vous dès maintenant pour que votre profil reste visible aux patients sans interruption."
+    },
+    "zh": {
+      "subject": "您的试用期即将结束 — Medalize",
+      "title": "试用期即将结束",
+      "body": "您的7天免费试用期即将结束。请立即订阅，以确保您的资料对患者持续可见。"
+    }
+  },
+  "trial_ended": {
+    "en": {
+      "subject": "Your Free Trial Has Ended — Medalize",
+      "title": "Trial Ended",
+      "body": "Your free trial has ended. You have 14 days to subscribe before your profile is hidden from patient search."
+    },
+    "ru": {
+      "subject": "Ваш пробный период завершён — Medalize",
+      "title": "Пробный период завершён",
+      "body": "Ваш бесплатный пробный период завершён. У вас есть 14 дней, чтобы оформить подписку, прежде чем ваш профиль будет скрыт из поиска пациентов."
+    },
+    "az": {
+      "subject": "Sınaq müddətiniz başa çatdı — Medalize",
+      "title": "Sınaq müddəti başa çatdı",
+      "body": "Pulsuz sınaq müddətiniz başa çatdı. Profiliniz pasiyent axtarışından gizlədilməzdən əvvəl abunə olmaq üçün 14 gününüz var."
+    },
+    "tr": {
+      "subject": "Deneme Süreniz Sona Erdi — Medalize",
+      "title": "Deneme Süresi Sona Erdi",
+      "body": "Ücretsiz deneme süreniz sona erdi. Profiliniz hasta aramalarından gizlenmeden önce abone olmak için 14 gününüz var."
+    },
+    "fr": {
+      "subject": "Votre essai gratuit est terminé — Medalize",
+      "title": "Essai gratuit terminé",
+      "body": "Votre essai gratuit est terminé. Vous avez 14 jours pour vous abonner avant que votre profil ne soit masqué des recherches des patients."
+    },
+    "zh": {
+      "subject": "您的免费试用已结束 — Medalize",
+      "title": "试用已结束",
+      "body": "您的免费试用已结束。您有14天的时间订阅，之后您的资料将从患者搜索结果中隐藏。"
+    }
+  },
+  "subscription_expiring": {
+    "en": {
+      "subject": "Renew Your Subscription — Medalize",
+      "title": "Subscription Renewal Due",
+      "body": "Your subscription payment is due. Renew within 14 days to keep your profile visible to patients."
+    },
+    "ru": {
+      "subject": "Продлите подписку — Medalize",
+      "title": "Требуется продление подписки",
+      "body": "Пришло время оплатить подписку. Продлите её в течение 14 дней, чтобы ваш профиль оставался видимым для пациентов."
+    },
+    "az": {
+      "subject": "Abunəliyinizi yeniləyin — Medalize",
+      "title": "Abunəlik yenilənməsi tələb olunur",
+      "body": "Abunəlik ödənişinizin vaxtı çatıb. Profilinizin pasiyentlərə görünməsini davam etdirmək üçün 14 gün ərzində yeniləyin."
+    },
+    "tr": {
+      "subject": "Aboneliğinizi Yenileyin — Medalize",
+      "title": "Abonelik Yenileme Gerekiyor",
+      "body": "Abonelik ödemenizin zamanı geldi. Profilinizin hastalar tarafından görünmeye devam etmesi için 14 gün içinde yenileyin."
+    },
+    "fr": {
+      "subject": "Renouvelez votre abonnement — Medalize",
+      "title": "Renouvellement d'abonnement requis",
+      "body": "Votre paiement d'abonnement est dû. Renouvelez-le sous 14 jours pour que votre profil reste visible aux patients."
+    },
+    "zh": {
+      "subject": "请续订您的订阅 — Medalize",
+      "title": "需要续订订阅",
+      "body": "您的订阅付款已到期。请在14天内续订，以保持您的资料对患者可见。"
+    }
+  },
+  "subscription_expired": {
+    "en": {
+      "subject": "Your Subscription Has Expired — Medalize",
+      "title": "Subscription Expired",
+      "body": "Your subscription has expired and your profile is now hidden from patient search. Subscribe anytime to become visible again."
+    },
+    "ru": {
+      "subject": "Срок действия подписки истёк — Medalize",
+      "title": "Подписка истекла",
+      "body": "Срок действия вашей подписки истёк, и ваш профиль теперь скрыт из поиска пациентов. Оформите подписку в любой момент, чтобы снова стать видимым."
+    },
+    "az": {
+      "subject": "Abunəliyinizin müddəti bitdi — Medalize",
+      "title": "Abunəlik bitdi",
+      "body": "Abunəliyinizin müddəti bitdi və profiliniz artıq pasiyent axtarışında gizlədilib. Yenidən görünmək üçün istənilən vaxt abunə ola bilərsiniz."
+    },
+    "tr": {
+      "subject": "Aboneliğinizin Süresi Doldu — Medalize",
+      "title": "Abonelik Sona Erdi",
+      "body": "Aboneliğinizin süresi doldu ve profiliniz artık hasta aramalarında gizlendi. Tekrar görünür olmak için istediğiniz zaman abone olabilirsiniz."
+    },
+    "fr": {
+      "subject": "Votre abonnement a expiré — Medalize",
+      "title": "Abonnement expiré",
+      "body": "Votre abonnement a expiré et votre profil est désormais masqué des recherches des patients. Abonnez-vous à tout moment pour redevenir visible."
+    },
+    "zh": {
+      "subject": "您的订阅已过期 — Medalize",
+      "title": "订阅已过期",
+      "body": "您的订阅已过期，您的资料现已从患者搜索结果中隐藏。您可以随时订阅以重新显示。"
+    }
+  },
+  "subscription_activated": {
+    "en": {
+      "subject": "Subscription Activated — Medalize",
+      "title": "Subscription Activated",
+      "body": "Your subscription is now active. Thank you for subscribing to Medalize."
+    },
+    "ru": {
+      "subject": "Подписка активирована — Medalize",
+      "title": "Подписка активирована",
+      "body": "Ваша подписка активирована. Благодарим за подписку на Medalize."
+    },
+    "az": {
+      "subject": "Abunəlik aktivləşdirildi — Medalize",
+      "title": "Abunəlik aktivləşdirildi",
+      "body": "Abunəliyiniz aktivləşdirildi. Medalize-ə abunə olduğunuz üçün təşəkkür edirik."
+    },
+    "tr": {
+      "subject": "Abonelik Aktifleştirildi — Medalize",
+      "title": "Abonelik Aktifleştirildi",
+      "body": "Aboneliğiniz artık aktif. Medalize'ye abone olduğunuz için teşekkür ederiz."
+    },
+    "fr": {
+      "subject": "Abonnement activé — Medalize",
+      "title": "Abonnement activé",
+      "body": "Votre abonnement est maintenant actif. Merci de vous être abonné à Medalize."
+    },
+    "zh": {
+      "subject": "订阅已激活 — Medalize",
+      "title": "订阅已激活",
+      "body": "您的订阅现已激活。感谢您订阅 Medalize。"
+    }
   }
 }
