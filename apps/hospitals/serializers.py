@@ -119,10 +119,41 @@ class HospitalLinkSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class HospitalBriefForDoctorSerializer(serializers.ModelSerializer):
+    """Doctor-side view of a hospital, nested inside
+    DoctorHospitalLinkSerializer below — identity and location only.
+    Deliberately excludes `status`: that field is the registry's
+    admin-review state (pending_review/confirmed/merged/rejected), an
+    internal curation workflow a doctor is not the audience for. Showing it
+    next to a doctor's own invitation or confirmed affiliation would read as
+    if something were wrong with the hospital. Contrast with
+    HospitalRegistrySerializer, which deliberately keeps `status` because
+    the picker (GET /api/hospitals/) uses it to flag a not-yet-vetted entry
+    *before* the doctor commits to it — a different moment with a different
+    audience."""
+
+    city_display = serializers.SerializerMethodField()
+    region_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Hospital
+        fields = [
+            'id', 'name', 'address', 'city', 'city_display', 'region',
+            'region_display', 'latitude', 'longitude',
+        ]
+        read_only_fields = fields
+
+    def get_city_display(self, obj):
+        return city_label(obj.city, viewer_language(self.context))
+
+    def get_region_display(self, obj):
+        return region_label(obj.region, viewer_language(self.context)) if obj.region else ''
+
+
 class DoctorHospitalLinkSerializer(serializers.ModelSerializer):
     """Doctor-side view of an affiliation: shows the hospital."""
 
-    hospital = HospitalRegistrySerializer(read_only=True)
+    hospital = HospitalBriefForDoctorSerializer(read_only=True)
 
     class Meta:
         model = HospitalDoctorLink

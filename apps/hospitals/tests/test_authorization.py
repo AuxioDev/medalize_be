@@ -11,6 +11,7 @@ from apps.hospitals.models import HospitalDoctorLink
 from apps.users.models import User
 
 from .base import (
+    DOCTOR_HOSPITAL_LINKS_URL,
     HOSPITAL_APPOINTMENTS_URL,
     HOSPITAL_DOCTOR_INVITE_URL,
     HOSPITAL_DOCTOR_SEARCH_URL,
@@ -232,6 +233,36 @@ class UnsubscribedHospitalAuthorizationTests(HospitalTestBase):
         from .base import HOSPITAL_PROFILE_URL, HOSPITAL_STATUS_URL
         self.assertEqual(self.client.get(HOSPITAL_PROFILE_URL).status_code, status.HTTP_200_OK)
         self.assertEqual(self.client.get(HOSPITAL_STATUS_URL).status_code, status.HTTP_200_OK)
+
+
+class DoctorHospitalLinkAuthorizationTests(HospitalDashboardTestBase):
+    """A doctor's own /doctor/hospital-links/ feed must never expose the
+    hospital's registry review state (pending_review/confirmed/merged/
+    rejected) — that's an internal admin-curation detail, not something a
+    doctor deciding whether to accept an invite (or reading their own
+    confirmed affiliation) needs or should see. Contrast with the picker
+    (GET /api/hospitals/), which deliberately keeps `status` for a different
+    audience/moment — see HospitalBriefForDoctorSerializer's docstring."""
+
+    def test_doctor_hospital_links_do_not_expose_registry_review_status(self):
+        self.as_hospital()
+        res = self.client.post(HOSPITAL_DOCTOR_INVITE_URL, {'doctor_id': str(self.doctor.id)}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+
+        self.as_doctor()
+        res = self.client.get(DOCTOR_HOSPITAL_LINKS_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        row = res.data[0]
+
+        # Exact key set — a future field added to HospitalRegistrySerializer
+        # must fail this test loudly instead of silently reaching here too.
+        self.assertEqual(set(row['hospital'].keys()), {
+            'id', 'name', 'address', 'city', 'city_display', 'region',
+            'region_display', 'latitude', 'longitude',
+        })
+        self.assertNotIn('status', row['hospital'])
+        self.assertNotIn('pending_review', str(res.data))
 
 
 class CrossRoleAuthorizationTests(HospitalDashboardTestBase):
