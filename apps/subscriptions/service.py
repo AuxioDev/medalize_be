@@ -63,7 +63,7 @@ def create_subscription_checkout(user, plan):
             plan=plan,
             amount=amount,
             currency='AZN',
-            provider='payriff',
+            provider=provider.name,
             provider_order_id=order.order_id,
             provider_session_id=order.session_id,
             payment_url=order.payment_url,

@@ -10,4 +10,5 @@ urlpatterns = [
     ),
     path('payments/webhook/payriff/', views.PayriffWebhookView.as_view(), name='payriff-webhook'),
     path('payments/return/', views.PayriffReturnView.as_view(), name='payriff-return'),
+    path('payments/mock-checkout/', views.MockCheckoutView.as_view(), name='mock-checkout'),
 ]

@@ -377,13 +377,24 @@ ASSISTANT_ENCRYPTION_KEY = env('ASSISTANT_ENCRYPTION_KEY', default='')
 FIREBASE_CREDENTIALS_JSON = env('FIREBASE_CREDENTIALS_JSON', default='')
 
 # ── In-app payments (Payriff — Azerbaijani card acquiring) ───────────────────
-# Both values must be set for payments to be enabled; leave either blank to
-# disable it (POST/GET /api/appointments/<id>/payment/ answer 503). Payment is
-# never a required step of booking — the rest of the flow is unaffected
-# either way. See apps/payments/providers/payriff.py::PayriffProvider for the
-# (partially unverified — flagged there) API details this integrates against.
+# Both values must be set for the real 'payriff' provider to be enabled;
+# leave either blank to disable it. Irrelevant while PAYMENT_PROVIDER='mock'
+# below (the current default) — the mock provider needs no credentials.
+# See apps/payments/providers/payriff.py::PayriffProvider for the (partially
+# unverified — flagged there) API details this integrates against.
 PAYRIFF_MERCHANT_ID = env('PAYRIFF_MERCHANT_ID', default='')
 PAYRIFF_SECRET_KEY = env('PAYRIFF_SECRET_KEY', default='')
+
+# Which apps.payments.providers.base.PaymentProvider backs every payment
+# surface in the app (appointments here, doctor/hospital subscriptions in
+# apps.subscriptions — all of them go through apps.payments.service.
+# get_provider(), never construct a provider directly). 'mock' is a
+# temporary stand-in that skips Payriff entirely: a same-backend page with a
+# cosmetic card-entry form marks the order paid on submit, no real API calls
+# or credentials involved. Set to 'payriff' (or unset) once the real
+# integration is verified against actual merchant credentials — see
+# PayriffProvider's docstring for exactly what's still unconfirmed there.
+PAYMENT_PROVIDER = env('PAYMENT_PROVIDER', default='mock')
 
 # Absolute base URL of this backend (no trailing slash needed), used to build
 # the approveURL/cancelURL/declineURL Payriff redirects the user's browser to

@@ -84,6 +84,8 @@ class PayriffProvider(PaymentProvider):
     JS-rendered site that wasn't scrapeable at the time).
     """
 
+    name = 'payriff'
+
     def __init__(self, merchant_id=None, secret_key=None):
         self.merchant_id = merchant_id if merchant_id is not None else settings.PAYRIFF_MERCHANT_ID
         self.secret_key = secret_key if secret_key is not None else settings.PAYRIFF_SECRET_KEY

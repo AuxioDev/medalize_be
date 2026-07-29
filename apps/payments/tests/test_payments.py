@@ -359,3 +359,19 @@ class ReturnPageTests(PaymentTestBase):
         self.client.credentials()
         res = self.client.get(f'{RETURN_URL}?result=approve&lang=xx')
         self.assertIn('Payment processed', res.content.decode('utf-8'))
+
+    def test_return_page_auto_redirects_into_the_app_via_deep_link(self):
+        # medalize:// is registered in ios/Runner/Info.plist's
+        # CFBundleURLTypes and the second intent-filter in
+        # android/app/.../AndroidManifest.xml — opening it alone brings the
+        # app to the foreground, which triggers the existing
+        # AppLifecycleState.resumed status recheck (no Dart-side deep-link
+        # parsing needed). Both the auto-refresh meta tag and the fallback
+        # button must carry it, since some mobile browsers require a user
+        # gesture before following a non-http(s) redirect.
+        self.client.credentials()
+        res = self.client.get(f'{RETURN_URL}?result=approve&lang=en')
+        html = res.content.decode('utf-8')
+        deep_link = 'medalize://payment-return?result=approve&lang=en'
+        self.assertIn(f'content="0;url={deep_link}"', html)
+        self.assertIn(f'href="{deep_link}"', html)

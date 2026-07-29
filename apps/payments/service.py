@@ -9,6 +9,7 @@ from apps.appointments.models import Appointment
 from apps.notifications.i18n import recipient_language
 
 from .models import Payment
+from .providers.mock import MockCardProvider
 from .providers.payriff import PayriffProvider
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,13 @@ def payments_enabled():
     env vars empty ⇒ the feature is off, payment endpoints answer 503, and
     the rest of the booking flow is completely unaffected — payment is never
     a required step of booking (see AppointmentPaymentView / boundaries in
-    the phase spec)."""
+    the phase spec).
+
+    The mock provider (see get_provider) needs no credentials at all, so it
+    is always enabled regardless of PAYRIFF_* — only the real 'payriff'
+    provider gates on them being configured."""
+    if getattr(settings, 'PAYMENT_PROVIDER', 'payriff') == 'mock':
+        return True
     return bool(
         getattr(settings, 'PAYRIFF_MERCHANT_ID', '')
         and getattr(settings, 'PAYRIFF_SECRET_KEY', '')
@@ -29,8 +36,18 @@ def payments_enabled():
 
 def get_provider():
     # The one seam a future second provider (or a Payriff API version swap)
-    # would plug into — views/service code never constructs PayriffProvider
-    # directly anywhere else.
+    # would plug into — views/service code never constructs a provider class
+    # directly anywhere else. settings.PAYMENT_PROVIDER='mock' (the current
+    # default — real Payriff credentials/verification aren't wired up yet,
+    # see PayriffProvider's docstring) routes every payment surface
+    # (appointments here, doctor/hospital subscriptions in
+    # apps.subscriptions, which import this function rather than
+    # constructing a provider themselves) through MockCardProvider instead.
+    # Flip PAYMENT_PROVIDER back to 'payriff' (or unset it) once that
+    # integration is verified against real credentials — nothing else here
+    # needs to change.
+    if getattr(settings, 'PAYMENT_PROVIDER', 'payriff') == 'mock':
+        return MockCardProvider()
     return PayriffProvider()
 
 
@@ -101,7 +118,7 @@ def get_or_create_payment(appointment):
         if payment is not None:
             payment.amount = fee
             payment.status = Payment.STATUS_PENDING
-            payment.provider = 'payriff'
+            payment.provider = provider.name
             payment.provider_order_id = order.order_id
             payment.provider_session_id = order.session_id
             payment.payment_url = order.payment_url
@@ -116,7 +133,7 @@ def get_or_create_payment(appointment):
             doctor=doctor,
             amount=fee,
             currency='AZN',
-            provider='payriff',
+            provider=provider.name,
             provider_order_id=order.order_id,
             provider_session_id=order.session_id,
             payment_url=order.payment_url,
