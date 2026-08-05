@@ -357,6 +357,21 @@ class AccountDeactivateSerializer(serializers.Serializer):
         return value
 
 
+class AccountDeleteSerializer(serializers.Serializer):
+    """Re-authentication for permanent account deletion — same shape and
+    same validation as AccountDeactivateSerializer, kept as its own class
+    rather than reused because deletion is a materially different,
+    irreversible action (see apps.users.services.delete_account) that
+    deserves an explicit, independently-evolvable serializer even though
+    the two happen to validate identically today."""
+    password = serializers.CharField(write_only=True, max_length=128)
+
+    def validate_password(self, value):
+        if not self.context['request'].user.check_password(value):
+            raise serializers.ValidationError('Password is incorrect.')
+        return value
+
+
 class EmailChangeRequestSerializer(serializers.Serializer):
     new_email = serializers.EmailField(max_length=255)
     password = serializers.CharField(write_only=True, max_length=128)

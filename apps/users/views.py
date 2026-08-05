@@ -28,6 +28,7 @@ from apps.notifications.i18n import recipient_language, render_template
 from .models import EmailChangeRequest, PasswordResetOTP, PatientProfile, SocialAccount, UserDevice
 from .serializers import (
     AccountDeactivateSerializer,
+    AccountDeleteSerializer,
     CustomTokenObtainPairSerializer,
     EmailChangeConfirmSerializer,
     EmailChangeRequestSerializer,
@@ -512,6 +513,24 @@ class AccountDeactivateView(APIView):
         # no keep_jti. Reactivation is manual (Django admin).
         _revoke_all_sessions(request.user)
         return Response({'message': 'Account deactivated.'})
+
+
+class AccountDeleteView(APIView):
+    """Permanent, irreversible account deletion — a separate, heavier
+    action from AccountDeactivateView above (see that view's docstring
+    comment: deactivation is meant to be manually reversible via the
+    Django admin; this is not reversible by any path). Re-authenticates
+    via AccountDeleteSerializer exactly like deactivation does, then hands
+    off to apps.users.services.delete_account for the full erase/
+    anonymize/cascade — see that module for the per-model reasoning."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = AccountDeleteSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        from .services import delete_account
+        delete_account(request.user, reason='user_requested')
+        return Response({'message': 'Account permanently deleted.'})
 
 
 class EmailChangeRequestView(APIView):

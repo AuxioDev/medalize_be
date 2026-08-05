@@ -88,11 +88,24 @@ class User(AbstractBaseUser, PermissionsMixin):
     language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default='en')
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    # Set (alongside is_active=False) by apps.users.services.delete_account —
+    # distinguishes a permanent, irreversible deletion from an ordinary
+    # deactivation (which also sets is_active=False but is meant to be
+    # manually reversible, see AccountDeactivateView). Never cleared once
+    # set; there is no reactivation path for a deleted account. Indexed for
+    # the same reason is_active-adjacent flags elsewhere in this model are —
+    # a future admin/support filter on it is the expected use.
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     # Audit trail for the explicit written consent Azerbaijan's Law on
     # Personal Data (No. 998-IIIQ) requires specifically for special-category
     # data (health data is one) — a checkbox the mobile app merely disables
     # submission on isn't provable after the fact; this timestamp is. Set
-    # once at registration (RegisterSerializer), never cleared afterward.
+    # once at registration (RegisterSerializer), never cleared afterward —
+    # including by account deletion (apps.users.services.delete_account):
+    # this timestamp is a compliance record of consent *given*, not personal
+    # data about who gave it, and is deliberately left alone by the same
+    # reasoning as the docstring above.
     privacy_consent_accepted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -305,7 +318,14 @@ def cancel_future_appointments_for_doctor(doctor):
     notify the affected patients. Called whenever a doctor becomes unbookable
     (deactivated or loses verification) so patients aren't left holding a
     booking nobody can act on. Reuses the existing booking-cancelled
-    notification path rather than a bespoke message."""
+    notification path rather than a bespoke message.
+
+    Never the patient's fault — always a full refund for any appointment
+    here that was actually paid for (see
+    apps.payments.service.refund_appointment_payment, a no-op when nothing
+    was ever paid). That call never raises, so a refund API failure can't
+    abort this loop or the User.save() that triggered it, for the other
+    appointments still to be cancelled/notified."""
     from django.core.cache import cache
     from django.utils import timezone
     from apps.appointments.models import Appointment
@@ -325,8 +345,59 @@ def cancel_future_appointments_for_doctor(doctor):
     )
 
     from apps.notifications.tasks import send_booking_cancelled
+    from apps.payments.service import refund_appointment_payment
     for appt in appointments:
         cache.delete(f'slots:{appt.doctor_id}:{appt.workplace_id}:{appt.starts_at.date()}')
+        refund_appointment_payment(appt, reason='doctor_deactivated')
+        try:
+            send_booking_cancelled.delay(str(appt.id))
+        except Exception:
+            logger.exception(
+                'Failed to enqueue cancellation notification for appointment %s', appt.id
+            )
+
+
+def cancel_future_appointments_for_patient(patient):
+    """Patient-side mirror of cancel_future_appointments_for_doctor: same
+    shape, same refund-unconditionally reasoning, same no-op-when-nothing-
+    to-do short-circuit — the only difference is which side of the booking
+    is filtered on and which cancellation `reason` is recorded on the
+    refund. Notifies the treating doctor instead of the patient (see
+    apps.notifications.tasks.send_booking_cancelled, which already looks up
+    both sides of the appointment rather than hardcoding a recipient).
+
+    Unlike the doctor version, there is no post_save signal wired to this
+    one — deactivating a *patient* account has never cancelled their
+    bookings (only a doctor becoming unbookable does that automatically),
+    and that stays true for AccountDeactivateView. This function has
+    exactly one caller: apps.users.services.delete_account, for the
+    patient-initiated permanent-deletion path, where leaving future
+    bookings dangling for a patient who no longer exists would strand the
+    doctor with an appointment nobody can attend or act on.
+    """
+    from django.core.cache import cache
+    from django.utils import timezone
+    from apps.appointments.models import Appointment
+
+    appointments = list(
+        Appointment.objects.filter(
+            patient=patient,
+            status__in=[Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED],
+            starts_at__gt=timezone.now(),
+        )
+    )
+    if not appointments:
+        return
+
+    Appointment.objects.filter(pk__in=[a.pk for a in appointments]).update(
+        status=Appointment.STATUS_CANCELLED, updated_at=timezone.now()
+    )
+
+    from apps.notifications.tasks import send_booking_cancelled
+    from apps.payments.service import refund_appointment_payment
+    for appt in appointments:
+        cache.delete(f'slots:{appt.doctor_id}:{appt.workplace_id}:{appt.starts_at.date()}')
+        refund_appointment_payment(appt, reason='patient_account_deleted')
         try:
             send_booking_cancelled.delay(str(appt.id))
         except Exception:

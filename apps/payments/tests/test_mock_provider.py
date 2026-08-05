@@ -26,6 +26,12 @@ class ProviderSelectionTests(AppointmentTestBase):
         self.assertIsInstance(get_provider(), MockCardProvider)
         self.assertEqual(get_provider().name, 'mock')
 
+    def test_mock_provider_refund_order_is_a_no_op_that_never_raises(self):
+        from apps.payments.providers.mock import MockCardProvider
+        # Should not raise — see apps.payments.service.refund_payment, which
+        # treats any exception here as a failed refund.
+        self.assertIsNone(MockCardProvider().refund_order('mock-order-1', 50))
+
 
 @override_settings(PAYMENT_PROVIDER='mock')
 class AppointmentMockCheckoutTests(AppointmentTestBase):

@@ -5,8 +5,10 @@ from .models import Appointment, Favorite, Review
 
 @admin.register(Appointment)
 class AppointmentAdmin(admin.ModelAdmin):
-    list_display = ['id', 'doctor', 'patient', 'workplace', 'starts_at', 'status']
-    list_filter = ['status']
+    list_display = [
+        'id', 'doctor', 'patient', 'workplace', 'starts_at', 'status', 'doctor_cancelled_late',
+    ]
+    list_filter = ['status', 'doctor_cancelled_late']
     search_fields = ['doctor__email', 'patient__email']
     ordering = ['-starts_at']
 

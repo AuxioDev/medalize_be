@@ -202,3 +202,80 @@ def handle_webhook_ping(provider_order_id):
             logger.exception('Failed to enqueue payment notification for payment %s', payment.id)
 
     return payment
+
+
+def refund_payment(payment, reason=''):
+    """Idempotent, best-effort full refund of a single ``Payment`` via the
+    active provider (mock or Payriff — see ``get_provider``). Called at
+    every money-handling trigger point in the phase-1 cancellation-fee
+    policy: patient cancellation (outside the window), doctor decline/
+    cancellation (always), the stale-pending auto-decline sweep, and the
+    doctor-deactivation mass-cancel. There are no partial refunds anywhere
+    in this codebase — always the payment's full ``amount``.
+
+    Mirrors ``get_or_create_payment``'s select_for_update() pattern: locks
+    the ``Payment`` row for the duration of the provider call so two
+    near-simultaneous triggers (e.g. a patient cancelling right as the
+    stale-pending sweep also fires) can't double-refund.
+
+    - ``STATUS_PAID`` → calls ``provider.refund_order()``. Success sets
+      ``STATUS_REFUNDED`` (+ ``refunded_at``). Failure is caught here —
+      never raised — and sets ``STATUS_REFUND_FAILED`` instead, so the
+      caller's appointment-status change is never rolled back by a refund
+      API failure; the exception is logged with ``reason`` for context, and
+      ``STATUS_REFUND_FAILED`` is the intentional admin-visible flag for
+      manual follow-up (PaymentAdmin filters/lists on ``status``; a human
+      can then re-attempt the refund through the Payriff dashboard
+      directly). This is deliberately a status value rather than a second
+      boolean field — one field, already surfaced in admin, already
+      filterable, with no risk of the two ever disagreeing.
+    - Any other status (``PENDING`` — nothing was ever captured;
+      ``FAILED``/``CANCELLED`` — same; already ``REFUNDED``/
+      ``REFUND_FAILED`` — already handled) is a pure no-op: returns the
+      Payment unchanged, no provider call, never an error. This is what
+      makes it safe for every trigger point to call unconditionally instead
+      of each one re-deriving "was this actually paid for".
+    - Never raises.
+    """
+    with transaction.atomic():
+        payment = Payment.objects.select_for_update().get(pk=payment.pk)
+        if payment.status != Payment.STATUS_PAID:
+            return payment
+
+        provider = get_provider()
+        try:
+            provider.refund_order(payment.provider_order_id, payment.amount)
+        except Exception:
+            logger.exception(
+                'Refund failed for payment %s (order %s, reason=%s)',
+                payment.id, payment.provider_order_id, reason,
+            )
+            payment.status = Payment.STATUS_REFUND_FAILED
+            payment.save(update_fields=['status', 'updated_at'])
+            return payment
+
+        payment.status = Payment.STATUS_REFUNDED
+        payment.refunded_at = timezone.now()
+        payment.save(update_fields=['status', 'refunded_at', 'updated_at'])
+        return payment
+
+
+def refund_appointment_payment(appointment, reason=''):
+    """Convenience wrapper for the cancellation/decline/expiry trigger
+    points in apps.appointments.views, apps.notifications.tasks, and
+    apps.users.models: looks up the appointment's Payment (if any) and
+    refunds it via ``refund_payment``.
+
+    A complete no-op — returns ``None``, no provider call — when the
+    appointment was never paid for at all (payments disabled, or the
+    patient never got as far as paying), which is the common case. Callers
+    don't need their own ``try/except Payment.DoesNotExist``, and — like
+    ``refund_payment`` — this never raises, so it's always safe to call
+    unconditionally at a trigger point even when the caller doesn't know
+    in advance whether a Payment row exists.
+    """
+    try:
+        payment = appointment.payment
+    except Payment.DoesNotExist:
+        return None
+    return refund_payment(payment, reason=reason)

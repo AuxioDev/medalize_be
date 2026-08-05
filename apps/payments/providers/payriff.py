@@ -57,10 +57,11 @@ class PayriffProvider(PaymentProvider):
         Payriff redirects the browser to approveURL/cancelURL/declineURL.
 
     WHAT IS **NOT** VERIFIED (best-effort guesses only, flagged inline):
-      - ``check_status`` below — no status-check endpoint could be confirmed
-        from any source while writing this integration. The
-        ``GET {base}orders/{transactionId}`` shape used here, signed the
-        same way as ``createOrder``, is a plausible guess, nothing more.
+      - ``check_status`` and ``refund_order`` below — no status-check or
+        refund endpoint for THIS api version (v1) could be confirmed from
+        any source while writing this integration. Both are plausible
+        guesses built by extending ``createOrder``'s confirmed shape/auth,
+        nothing more — see each method's own docstring.
       - The webhook payload's shape and, critically, its signature/auth
         scheme — could not be confirmed at all. This is exactly why
         ``apps.payments.service.handle_webhook_ping`` never trusts a webhook
@@ -68,12 +69,10 @@ class PayriffProvider(PaymentProvider):
         ``check_status`` (this same authenticated method) and updates
         ``Payment`` from THAT response. A wrong guess about the webhook
         signature therefore cannot fabricate a false "paid" state.
-      - Open-search fragments hint at a possibly newer API version (v3?)
-        with different field names entirely (``cardUuid``, ``callbackUrl``
-        instead of approve/cancel/declineURL, ``orderId``+``paymentStatus``
-        instead of ``transactionId``, a ``{code, message, route,
-        internalMessage, responseId, payload}`` response envelope) — none of
-        that could be confirmed either, so it is NOT implemented here.
+      - There IS a confirmed newer API version (v3) with different field
+        names entirely and a different auth scheme — see ``refund_order``'s
+        docstring for exactly what's confirmed about it and why it is
+        deliberately NOT what this file implements.
 
     BEFORE GOING LIVE: register a sandbox/test merchant account at
     payriff.com (or use merchant credentials the user provides) and re-verify
@@ -189,3 +188,68 @@ class PayriffProvider(PaymentProvider):
             raw_status, provider_order_id,
         )
         raise PayriffError(f'Unrecognized Payriff order status: {raw_status!r}')
+
+    def refund_order(self, provider_order_id, amount):
+        """
+        ⚠️  UNVERIFIED — see the class docstring. No refund endpoint for API
+        v1 (the version this file implements) could be confirmed from any
+        available source. This is a best-effort guess: ``POST
+        {base}refund``, signed identically to ``createOrder``/
+        ``check_status`` (the same ``{"body": {...}, "encryptionToken",
+        "merchant"}`` envelope and ``sha1(secretKey + encryptionToken)``
+        signature) — extending v1's own confirmed conventions to an
+        endpoint name whose existence and *purpose* (not its v1 shape) are
+        independently confirmed below.
+
+        What IS concretely confirmed, and why this doesn't just copy it:
+        the open-source ``nasimic/payriff`` Laravel package (MIT,
+        github.com/nasimic/payriff — real code exercising a live
+        integration, not marketing copy) implements a refund call against
+        Payriff's newer **v3** API: ``POST
+        https://api.payriff.com/api/v3/refund`` with a flat body
+        ``{"orderId": ..., "refundAmount": ...}`` and auth header
+        ``Authorization: <secretKey>`` (the bare secret key, no
+        encryptionToken/signature at all — a completely different auth
+        scheme from v1's). v1 and v3 are different API surfaces on
+        different base paths with different auth; bolting a plain-secret-key
+        v3 call onto this otherwise sha1-signed v1 integration would be
+        internally inconsistent and would most likely just fail auth against
+        v1 credentials. So instead this method applies v1's own confirmed
+        request/signature shape to the ``refund`` endpoint name, on the
+        working assumption v1 exposes the same operation under its own
+        conventions — the same extend-what's-confirmed approach already
+        used for ``check_status`` above.
+
+        Raises ``PayriffError`` on any failure (network, non-2xx, unparseable
+        body, or a non-success ``code``) — see ``PayriffError``'s docstring:
+        the caller (``apps.payments.service.refund_payment``) must never
+        interpret a swallowed exception as a successful refund.
+
+        BEFORE GOING LIVE: verify against the real merchant-dashboard docs
+        (see class docstring). If v1 turns out not to support refunds at
+        all, the likely real fix is migrating this whole provider to v3
+        (which does have a confirmed, real refund endpoint) rather than
+        patching this guess further — a larger, deliberate follow-up, not
+        something to silently half-do here.
+        """
+        encryption_token = self._encryption_token()
+        body = {
+            'body': {
+                'orderId': provider_order_id,
+                'amount': float(amount),
+            },
+            'encryptionToken': encryption_token,
+            'merchant': self.merchant_id,
+        }
+        try:
+            response = requests.post(
+                f'{_BASE_URL}refund', json=body,
+                headers=self._headers(encryption_token), timeout=_REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except (requests.RequestException, ValueError) as exc:
+            raise PayriffError(f'Payriff refund request failed: {exc}') from exc
+
+        if data.get('code') != _CODE_SUCCESS:
+            raise PayriffError(f"Payriff refund returned code {data.get('code')!r}")

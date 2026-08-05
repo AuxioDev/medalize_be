@@ -482,19 +482,46 @@ class PatientAppointmentDetailView(APIView):
                 {'code': 'conflict', 'message': 'Only pending or confirmed appointments can be cancelled.'},
                 status=status.HTTP_409_CONFLICT,
             )
+
+        # Binary refund policy, no partial amounts (phase-1 money-handling
+        # audit): cancellation itself is ALWAYS allowed now — the previous
+        # hard block inside the window forced the patient to just let the
+        # appointment lapse (surfacing later as a doctor-marked no-show)
+        # instead of letting them free the slot for the doctor/waitlist.
+        # Outside the window → full refund; inside it → the cancellation
+        # still succeeds, it just carries no refund, which the response
+        # below makes explicit via `payment` (the post-refund-attempt
+        # snapshot, or null if nothing was ever paid) and
+        # `refund_eligible`.
         window_hours = getattr(
             appointment.doctor.doctor_profile, 'cancellation_window_hours',
             CANCELLATION_WINDOW_HOURS,
         )
-        if appointment.starts_at <= timezone.now() + datetime.timedelta(hours=window_hours):
-            return Response(
-                {'code': 'conflict',
-                 'message': f'Cannot cancel within {window_hours} hours of appointment.'},
-                status=status.HTTP_409_CONFLICT,
-            )
+        refund_eligible = appointment.starts_at > timezone.now() + datetime.timedelta(hours=window_hours)
 
         appointment.status = Appointment.STATUS_CANCELLED
         appointment.save(update_fields=['status', 'updated_at'])
+
+        from apps.payments.models import Payment
+        from apps.payments.serializers import PaymentSerializer
+        if refund_eligible:
+            # Never raises — a refund API failure must not undo the
+            # cancellation already saved above (see refund_payment's
+            # docstring for how a failure is surfaced for manual follow-up).
+            # Use the returned instance directly rather than re-reading
+            # appointment.payment afterwards: refund_appointment_payment
+            # re-fetches the row under select_for_update() as a separate
+            # Python object, so the reverse-relation cache on `appointment`
+            # (populated by whichever of the two branches here runs first)
+            # would otherwise still reflect the pre-refund status.
+            from apps.payments.service import refund_appointment_payment
+            payment = refund_appointment_payment(appointment, reason='patient_cancellation')
+        else:
+            try:
+                payment = appointment.payment
+            except Payment.DoesNotExist:
+                payment = None
+        payment_data = PaymentSerializer(payment).data if payment is not None else None
 
         try:
             from apps.notifications.tasks import send_booking_cancelled
@@ -507,7 +534,11 @@ class PatientAppointmentDetailView(APIView):
             f':{appointment.starts_at.date()}'
         )
         cache.delete(f'next_slot:{appointment.doctor_id}')
-        return Response(status=status.HTTP_204_NO_CONTENT)
+
+        data = AppointmentSerializer(appointment, context={'request': request}).data
+        data['refund_eligible'] = refund_eligible
+        data['payment'] = payment_data
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class DoctorNextSlotView(APIView):
@@ -761,9 +792,43 @@ class DoctorAppointmentStatusView(APIView):
                     {'code': 'conflict', 'message': 'Only confirmed appointments can be marked as no-show.'},
                     status=status.HTTP_409_CONFLICT,
                 )
+            # Mirrors the analogous guard on STATUS_COMPLETED above — a
+            # doctor must not be able to mark a visit no-show before it has
+            # even started (there is no refund on a no-show, so this is
+            # squarely a money-handling gate, not just a data-quality one).
+            if timezone.now() < appointment.starts_at:
+                return Response(
+                    {
+                        'code': 'conflict',
+                        'message': 'Cannot mark an appointment as no-show before it has started.',
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+        # Doctor-initiated CANCELLED on a CONFIRMED appointment, inside the
+        # window, is tracked as a late cancellation — an accountability/
+        # stats signal only (see DoctorStatsView, AppointmentAdmin). It has
+        # no bearing on the refund below: doctor-initiated cancel/decline is
+        # never the patient's fault, so it always refunds in full regardless
+        # of timing (see refund_appointment_payment's docstring) — the
+        # binary window only ever gates *patient*-initiated cancellations
+        # (PatientAppointmentDetailView.delete).
+        doctor_cancelled_late = False
+        if new_status == Appointment.STATUS_CANCELLED and appointment.status == Appointment.STATUS_CONFIRMED:
+            window_hours = getattr(
+                appointment.doctor.doctor_profile, 'cancellation_window_hours',
+                CANCELLATION_WINDOW_HOURS,
+            )
+            doctor_cancelled_late = (
+                appointment.starts_at <= timezone.now() + datetime.timedelta(hours=window_hours)
+            )
 
         appointment.status = new_status
-        appointment.save(update_fields=['status', 'updated_at'])
+        update_fields = ['status', 'updated_at']
+        if doctor_cancelled_late:
+            appointment.doctor_cancelled_late = True
+            update_fields.append('doctor_cancelled_late')
+        appointment.save(update_fields=update_fields)
 
         # DECLINED frees the slot exactly like CANCELLED does (both are
         # excluded from occupancy checks everywhere) — the cache must be
@@ -775,6 +840,16 @@ class DoctorAppointmentStatusView(APIView):
                 f':{appointment.starts_at.date()}'
             )
             cache.delete(f'next_slot:{appointment.doctor_id}')
+            # Doctor-initiated — never the patient's fault — always a full
+            # refund regardless of timing. Never raises: a refund API
+            # failure must not undo the status change already saved above
+            # (see refund_payment's docstring for how a failure is surfaced
+            # for manual follow-up instead).
+            from apps.payments.service import refund_appointment_payment
+            refund_reason = (
+                'doctor_decline' if new_status == Appointment.STATUS_DECLINED else 'doctor_cancellation'
+            )
+            refund_appointment_payment(appointment, reason=refund_reason)
 
         try:
             from apps.notifications.tasks import (
@@ -1019,6 +1094,16 @@ class DoctorStatsView(APIView):
         confirmed_count = decided.filter(status=Appointment.STATUS_CONFIRMED).count()
         acceptance_rate = round(confirmed_count / decided_count * 100) if decided_count else None
 
+        # Deliberately adjacent to (not folded into) acceptance_rate: that
+        # metric is about how often the doctor confirms vs. declines a
+        # PENDING request, a different behavior from cancelling a booking
+        # the patient already believed was confirmed. See
+        # DoctorAppointmentStatusView, which sets doctor_cancelled_late —
+        # this was flagged in the phase-1 audit as untracked entirely.
+        late_cancellations_this_month = qs.filter(
+            doctor_cancelled_late=True, updated_at__gte=month_start,
+        ).count()
+
         data = {
             'appointments_this_month': this_month,
             'pending_count': pending,
@@ -1030,5 +1115,6 @@ class DoctorStatsView(APIView):
                 'appointments_last_month': last_month,
                 'total_patients': total_patients,
                 'acceptance_rate': acceptance_rate,
+                'late_cancellations_this_month': late_cancellations_this_month,
             })
         return Response(data)

@@ -48,3 +48,10 @@ class MockCardProvider(PaymentProvider):
         # being called a second time) doesn't hard-fail for lack of an
         # implementation.
         return 'paid'
+
+    def refund_order(self, provider_order_id, amount):
+        # No external state to touch, and nothing that can fail — a refund
+        # against the mock provider always "succeeds". Exists purely so
+        # apps.payments.service.refund_payment has the same provider-
+        # agnostic call to make regardless of PAYMENT_PROVIDER.
+        return None

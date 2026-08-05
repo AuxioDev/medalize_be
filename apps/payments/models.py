@@ -23,9 +23,22 @@ class Payment(models.Model):
     STATUS_PAID = 'paid'
     STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
+    # Set by apps.payments.service.refund_payment once a PAID payment has
+    # been refunded via the provider (always the full amount — see the
+    # phase-1 binary cancellation-fee policy, there are no partial refunds
+    # anywhere in this codebase).
+    STATUS_REFUNDED = 'refunded'
+    # The refund-triggering event (cancellation/decline/expiry/etc.) still
+    # succeeds even when this happens — refund_payment never raises, so a
+    # failed provider call must never roll back the appointment mutation
+    # that triggered it. This status is the admin-visible flag for manual
+    # follow-up: PaymentAdmin filters/lists on it (see admin.py) so staff
+    # can find and manually refund these through the Payriff dashboard.
+    STATUS_REFUND_FAILED = 'refund_failed'
     STATUS_CHOICES = [
         (STATUS_PENDING, 'Pending'), (STATUS_PAID, 'Paid'),
         (STATUS_FAILED, 'Failed'), (STATUS_CANCELLED, 'Cancelled'),
+        (STATUS_REFUNDED, 'Refunded'), (STATUS_REFUND_FAILED, 'Refund failed'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -33,11 +46,19 @@ class Payment(models.Model):
         'appointments.Appointment', on_delete=models.CASCADE, related_name='payment',
     )
     # Denormalized from appointment at creation time (same as Review/Prescription).
+    # Nullable for the same reason apps.appointments.models.Review.patient
+    # is: apps.users.services.delete_account's account-deletion cascade
+    # retains this row (it's a real accounting/tax record — see that
+    # module's _anonymize_payments) but explicitly nulls the FK back to an
+    # identifiable person on whichever side `user` was. SET_NULL, not
+    # CASCADE, to match.
     patient = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payments',
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='payments',
     )
     doctor = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payments_received',
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='payments_received',
     )
     # Denormalized from appointment.dependent at creation time, same as
     # doctor/patient above — no new UI/input here, get_or_create_payment()
@@ -51,7 +72,8 @@ class Payment(models.Model):
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='AZN')
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    # max_length=20 to fit 'refund_failed' (13 chars) with headroom.
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     provider = models.CharField(max_length=20, default='payriff')
     # Indexed: the webhook and check_status re-verification both look a
     # Payment up by this field, never by our own id.
@@ -61,6 +83,8 @@ class Payment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    # Set by refund_payment alongside STATUS_REFUNDED, mirroring paid_at.
+    refunded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']

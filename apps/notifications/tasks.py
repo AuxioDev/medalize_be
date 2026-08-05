@@ -568,6 +568,13 @@ def send_payment_received(payment_id):
         payment = Payment.objects.select_related('doctor', 'patient').get(pk=payment_id)
     except Payment.DoesNotExist:
         return
+    # Both FKs are nullable — apps.users.services.delete_account anonymizes
+    # them on account deletion (see Payment.patient's docstring). Nothing
+    # meaningful to notify once either side of the payment is gone; this is
+    # a defensive guard for a late/retried webhook landing after that
+    # anonymization already happened, not the common case.
+    if payment.patient_id is None or payment.doctor_id is None:
+        return
 
     tpl = render_template(
         'payment_received', recipient_language(payment.patient),
@@ -693,19 +700,26 @@ def send_hospital_notification(user_id, template_key, **kwargs):
 @shared_task
 def expire_stale_pending_appointments():
     """Decline appointments still pending past their start time (the doctor never
-    confirmed or declined). Prevents them lingering forever and frees the slot."""
+    confirmed or declined). Prevents them lingering forever and frees the slot.
+
+    Never the patient's fault — always a full refund for any appointment
+    here that was actually paid for (see
+    apps.payments.service.refund_appointment_payment, a no-op when nothing
+    was ever paid). refund_appointment_payment never raises, so a refund
+    API failure can't abort this sweep for the other appointments in it."""
     from apps.appointments.models import Appointment
+    from apps.payments.service import refund_appointment_payment
     now = timezone.now()
-    ids = list(
-        Appointment.objects
-        .filter(status=Appointment.STATUS_PENDING, starts_at__lte=now)
-        .values_list('id', flat=True)
+    appointments = list(
+        Appointment.objects.filter(status=Appointment.STATUS_PENDING, starts_at__lte=now)
     )
-    if not ids:
+    if not appointments:
         return
+    ids = [appt.id for appt in appointments]
     Appointment.objects.filter(id__in=ids).update(
         status=Appointment.STATUS_DECLINED,
         updated_at=now,
     )
-    for appt_id in ids:
-        send_booking_declined.delay(str(appt_id))
+    for appt in appointments:
+        refund_appointment_payment(appt, reason='expired_pending')
+        send_booking_declined.delay(str(appt.id))

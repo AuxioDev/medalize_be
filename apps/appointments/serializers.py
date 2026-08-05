@@ -79,6 +79,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
     # Server-computed so the client doesn't hardcode the cancellation rule.
     can_cancel = serializers.SerializerMethodField()
     can_reschedule = serializers.SerializerMethodField()
+    cancellation_refund_eligible = serializers.SerializerMethodField()
     has_review = serializers.SerializerMethodField()
     review = serializers.SerializerMethodField()
     can_edit_review = serializers.SerializerMethodField()
@@ -88,7 +89,8 @@ class AppointmentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'doctor', 'patient', 'dependent', 'workplace',
             'starts_at', 'ends_at', 'status', 'reason', 'notes', 'created_at',
-            'can_cancel', 'can_reschedule', 'has_review', 'review', 'can_edit_review',
+            'can_cancel', 'can_reschedule', 'cancellation_refund_eligible',
+            'has_review', 'review', 'can_edit_review',
         ]
 
     def _beyond_window(self, obj):
@@ -99,6 +101,16 @@ class AppointmentSerializer(serializers.ModelSerializer):
         return obj.starts_at > timezone.now() + timedelta(hours=hours)
 
     def get_can_cancel(self, obj):
+        # Cancellation itself is always allowed for a pending/confirmed
+        # appointment, regardless of the window — see
+        # PatientAppointmentDetailView.delete and the phase-1 money-handling
+        # audit (a hard block here used to force the patient into leaving
+        # the appointment to lapse into a doctor-marked no-show instead of
+        # letting them free the slot). cancellation_refund_eligible below is
+        # what actually gates the refund.
+        return obj.status in (Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED)
+
+    def get_cancellation_refund_eligible(self, obj):
         return (
             obj.status in (Appointment.STATUS_PENDING, Appointment.STATUS_CONFIRMED)
             and self._beyond_window(obj)
@@ -290,6 +302,12 @@ class ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'appointment', 'patient_name', 'created_at', 'updated_at']
 
     def get_patient_name(self, obj):
+        # patient is null after apps.users.services.delete_account has
+        # anonymized this review (see Review.patient's docstring) — the
+        # mobile ReviewModel already falls back to a generic "Patient"
+        # label when this is blank.
+        if obj.patient is None:
+            return ''
         return f'{obj.patient.first_name} {obj.patient.last_name}'.strip() or obj.patient.email
 
 

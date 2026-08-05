@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     AccountDeactivateView,
+    AccountDeleteView,
     AvatarUploadView,
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
@@ -31,6 +32,7 @@ urlpatterns = [
     path('devices/<int:pk>/', DeviceDetailView.as_view(), name='auth-device-detail'),
     path('me/', MeView.as_view(), name='auth-me'),
     path('deactivate/', AccountDeactivateView.as_view(), name='auth-deactivate'),
+    path('delete/', AccountDeleteView.as_view(), name='auth-account-delete'),
     path('email/change/', EmailChangeRequestView.as_view(), name='auth-email-change'),
     path('email/change/confirm/', EmailChangeConfirmView.as_view(), name='auth-email-change-confirm'),
     path('profile/avatar/', AvatarUploadView.as_view(), name='auth-avatar-upload'),

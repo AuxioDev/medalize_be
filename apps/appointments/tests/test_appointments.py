@@ -385,11 +385,16 @@ class PatientAppointmentTests(AppointmentTestBase):
         res = self.client.get(f'{APPOINTMENTS_URL}{appt.pk}/')
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_cancel_pending_returns_204(self):
+    def test_cancel_pending_returns_200_with_refund_info(self):
+        # No hard block anymore (phase-1 money-handling audit) — cancelling
+        # is always allowed for pending/confirmed appointments; the response
+        # body now carries refund_eligible/payment instead of a bare 204.
         appt = self._make_appointment(status=Appointment.STATUS_PENDING)
         self.as_patient()
         res = self.client.delete(f'{APPOINTMENTS_URL}{appt.pk}/')
-        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data['refund_eligible'])
+        self.assertIsNone(res.data['payment'])  # never paid for
         appt.refresh_from_db()
         self.assertEqual(appt.status, Appointment.STATUS_CANCELLED)
 
@@ -399,12 +404,19 @@ class PatientAppointmentTests(AppointmentTestBase):
         res = self.client.delete(f'{APPOINTMENTS_URL}{appt.pk}/')
         self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
 
-    def test_cancel_within_2_hours_returns_409(self):
+    def test_cancel_within_2_hours_succeeds_without_refund(self):
+        # The old hard block is gone: cancelling inside the window now
+        # succeeds (frees the slot for the doctor/waitlist instead of
+        # leaving the patient stuck with a booking they can't act on) but
+        # is not refund-eligible.
         soon = timezone.now() + datetime.timedelta(hours=1)
         appt = self._make_appointment(starts_at=soon, status=Appointment.STATUS_CONFIRMED)
         self.as_patient()
         res = self.client.delete(f'{APPOINTMENTS_URL}{appt.pk}/')
-        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['refund_eligible'])
+        appt.refresh_from_db()
+        self.assertEqual(appt.status, Appointment.STATUS_CANCELLED)
 
     def test_reschedule_from_requires_rescheduling_bypasses_2h_window(self):
         # The doctor asked to move it, so even if the original slot is within the
@@ -429,13 +441,17 @@ class PatientAppointmentTests(AppointmentTestBase):
         res = self.client.get(f'{APPOINTMENTS_URL}{appt.pk}/')
         self.assertTrue(res.data['can_cancel'])
         self.assertTrue(res.data['can_reschedule'])
+        self.assertTrue(res.data['cancellation_refund_eligible'])
 
-    def test_can_cancel_flag_false_within_window(self):
+    def test_can_cancel_stays_true_within_window_but_refund_is_not_eligible(self):
+        # Cancellation itself is never blocked by the window — only the
+        # refund is (see PatientAppointmentDetailView.delete).
         soon = timezone.now() + datetime.timedelta(hours=1)
         appt = self._make_appointment(starts_at=soon, status=Appointment.STATUS_CONFIRMED)
         self.as_patient()
         res = self.client.get(f'{APPOINTMENTS_URL}{appt.pk}/')
-        self.assertFalse(res.data['can_cancel'])
+        self.assertTrue(res.data['can_cancel'])
+        self.assertFalse(res.data['cancellation_refund_eligible'])
 
     def test_can_reschedule_flag_true_for_requires_rescheduling(self):
         soon = timezone.now() + datetime.timedelta(hours=1)
@@ -448,15 +464,17 @@ class PatientAppointmentTests(AppointmentTestBase):
         self.assertTrue(res.data['can_reschedule'])
 
     def test_can_cancel_respects_per_doctor_window(self):
-        # Doctor widens the window to 24h → an appointment 5h away is no longer
-        # cancellable (would be cancellable under the default 2h window).
+        # Doctor widens the window to 24h → an appointment 5h away is no
+        # longer refund-eligible (would be under the default 2h window),
+        # though still cancellable.
         self.doctor.doctor_profile.cancellation_window_hours = 24
         self.doctor.doctor_profile.save(update_fields=['cancellation_window_hours'])
         in_5h = timezone.now() + datetime.timedelta(hours=5)
         appt = self._make_appointment(starts_at=in_5h, status=Appointment.STATUS_CONFIRMED)
         self.as_patient()
         res = self.client.get(f'{APPOINTMENTS_URL}{appt.pk}/')
-        self.assertFalse(res.data['can_cancel'])
+        self.assertTrue(res.data['can_cancel'])
+        self.assertFalse(res.data['cancellation_refund_eligible'])
 
 
 class DoctorAppointmentTests(AppointmentTestBase):
@@ -531,7 +549,12 @@ class DoctorAppointmentTests(AppointmentTestBase):
         self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
 
     def test_mark_no_show_on_confirmed(self):
-        appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)
+        # Must have already started — see test_cannot_mark_no_show_before_start.
+        past = timezone.now() - datetime.timedelta(minutes=5)
+        appt = self._make_appointment(
+            starts_at=past, ends_at=past + datetime.timedelta(minutes=30),
+            status=Appointment.STATUS_CONFIRMED,
+        )
         self.as_doctor()
         res = self.client.patch(
             f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/',
@@ -539,6 +562,19 @@ class DoctorAppointmentTests(AppointmentTestBase):
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data['status'], Appointment.STATUS_NO_SHOW)
+
+    def test_cannot_mark_no_show_before_start(self):
+        # A doctor must not be able to mark a visit no-show before it has
+        # even started — mirrors the analogous guard on STATUS_COMPLETED.
+        appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)  # starts_at is in the future
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/',
+            {'status': 'no_show'}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
+        appt.refresh_from_db()
+        self.assertEqual(appt.status, Appointment.STATUS_CONFIRMED)
 
     def test_mark_no_show_on_pending_returns_409(self):
         appt = self._make_appointment(status=Appointment.STATUS_PENDING)
@@ -592,3 +628,68 @@ class DoctorAppointmentTests(AppointmentTestBase):
             f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'confirmed'}, format='json'
         )
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class DoctorLateCancellationTrackingTests(AppointmentTestBase):
+    """doctor_cancelled_late is an accountability/stats signal only — it
+    never blocks the cancellation and has no bearing on the refund (see
+    apps.payments.tests.test_payments.DoctorCancelRefundTests for the
+    refund side of this same trigger point)."""
+
+    STATS_URL = '/api/doctor/stats/'
+
+    def test_cancel_within_window_flags_late_cancellation(self):
+        soon = timezone.now() + datetime.timedelta(hours=1)
+        appt = self._make_appointment(starts_at=soon, status=Appointment.STATUS_CONFIRMED)
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'cancelled'}, format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        appt.refresh_from_db()
+        self.assertTrue(appt.doctor_cancelled_late)
+
+    def test_cancel_outside_window_does_not_flag_late_cancellation(self):
+        appt = self._make_appointment(status=Appointment.STATUS_CONFIRMED)  # 8 days out
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'cancelled'}, format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        appt.refresh_from_db()
+        self.assertFalse(appt.doctor_cancelled_late)
+
+    def test_cancelling_a_still_pending_appointment_does_not_flag_late(self):
+        # Late-cancellation tracking is specifically about letting a patient
+        # down on a booking they believed was CONFIRMED — cancelling a
+        # still-PENDING request doesn't carry the same meaning.
+        soon = timezone.now() + datetime.timedelta(hours=1)
+        appt = self._make_appointment(starts_at=soon, status=Appointment.STATUS_PENDING)
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'cancelled'}, format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        appt.refresh_from_db()
+        self.assertFalse(appt.doctor_cancelled_late)
+
+    def test_declining_a_pending_appointment_does_not_flag_late(self):
+        appt = self._make_appointment(status=Appointment.STATUS_PENDING)
+        self.as_doctor()
+        res = self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'declined'}, format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        appt.refresh_from_db()
+        self.assertFalse(appt.doctor_cancelled_late)
+
+    def test_late_cancellation_count_surfaced_in_doctor_stats(self):
+        soon = timezone.now() + datetime.timedelta(hours=1)
+        appt = self._make_appointment(starts_at=soon, status=Appointment.STATUS_CONFIRMED)
+        self.as_doctor()
+        self.client.patch(
+            f'{DOCTOR_APPOINTMENTS_URL}{appt.pk}/status/', {'status': 'cancelled'}, format='json'
+        )
+        res = self.client.get(self.STATS_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['late_cancellations_this_month'], 1)

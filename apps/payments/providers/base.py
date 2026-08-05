@@ -41,3 +41,16 @@ class PaymentProvider:
         of ``Payment.STATUS_*``.
         """
         raise NotImplementedError
+
+    def refund_order(self, provider_order_id, amount):
+        """Refund a previously captured order in full (this codebase has no
+        partial-refund concept anywhere — see the phase-1 binary
+        cancellation-fee policy).
+
+        Must raise on any failure — never return a falsy/ambiguous value on
+        error. The caller (``service.refund_payment``) treats any exception
+        as "refund failed", logs it, and marks the ``Payment`` row
+        ``STATUS_REFUND_FAILED`` for manual follow-up rather than ever
+        guessing the refund succeeded.
+        """
+        raise NotImplementedError

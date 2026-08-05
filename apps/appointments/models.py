@@ -74,6 +74,15 @@ class Appointment(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    # Set when a doctor cancels a CONFIRMED appointment (via
+    # DoctorAppointmentStatusView) inside cancellation_window_hours of its
+    # start. An accountability/stats signal only (see DoctorStatsView and
+    # AppointmentAdmin) — it never blocks the cancellation itself, and it
+    # has no bearing on the refund: a doctor-initiated cancellation always
+    # refunds the patient in full regardless of timing (see
+    # apps.payments.service.refund_appointment_payment). This flag exists
+    # purely to make late doctor-initiated cancellations visible/countable.
+    doctor_cancelled_late = models.BooleanField(default=False)
 
     def clean(self):
         if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
@@ -195,9 +204,19 @@ class Review(models.Model):
         on_delete=models.CASCADE,
         related_name='doctor_reviews',
     )
+    # Nullable — not at creation (ReviewCreateSerializer always sets it) but
+    # for apps.users.services.delete_account's account-deletion cascade:
+    # the review itself is retained (deleting it would silently change the
+    # doctor's aggregate rating), but the FK back to an identifiable
+    # reviewer is explicitly nulled out rather than left in place. SET_NULL,
+    # not CASCADE, to match — deleting this user's row must never delete
+    # the review, only the reference to it (in practice the User row is
+    # never actually deleted, only scrubbed in place, but the FK shape
+    # should say what it means regardless).
     patient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
         related_name='patient_reviews',
     )
     rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
