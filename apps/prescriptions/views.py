@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.appointments.models import Appointment
+from apps.core.models import log_record_access
 from apps.medications.models import Medication
 from apps.medications.serializers import MedicationSerializer
 from apps.users.permissions import IsDoctorVerified, IsPatient
@@ -41,6 +42,9 @@ class AppointmentPrescriptionView(APIView):
             prescription = appointment.prescription
         except Prescription.DoesNotExist:
             raise NotFound()
+        # Passive audit trail on successful single-object retrieval — see
+        # apps.core.models.RecordAccessLog.
+        log_record_access(request.user, prescription)
         return Response(PrescriptionSerializer(prescription).data)
 
     def post(self, request, pk):
@@ -97,6 +101,7 @@ class PrescriptionDetailView(APIView):
             raise NotFound()
         if request.user not in (prescription.doctor, prescription.patient):
             raise NotFound()
+        log_record_access(request.user, prescription)
         return Response(PrescriptionSerializer(prescription).data)
 
 

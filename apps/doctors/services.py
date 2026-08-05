@@ -6,12 +6,15 @@ import them without reaching into another app's view module — a views-to-
 views import across apps is how circular imports start.
 """
 import datetime
+import logging
 
 from django.core.cache import cache
 from rest_framework.exceptions import ValidationError
 
 from .models import WorkingHours
 from .serializers import WorkingHoursReplaceItemSerializer
+
+logger = logging.getLogger(__name__)
 
 WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 DEFAULT_START = datetime.time(9, 0)
@@ -83,6 +86,29 @@ def validated_hours_items(data):
         raise ValidationError({'weekday': 'Duplicate weekdays are not allowed.'})
 
     return items
+
+
+def notify_verification_reset(profile):
+    """Tell a doctor their profile dropped out of verified status because
+    they edited a credential field (specialization, license number, or
+    diploma) that the original admin review covered. Called after the
+    caller has already flipped ``profile.is_verified`` to False and saved —
+    that save fires apps.users.models.notify_doctor_verified's post_save
+    signal, which cancels the doctor's future pending/confirmed appointments
+    the same way an admin-initiated unverify does (a credential swap
+    shouldn't leave stale bookings under a no-longer-reviewed identity).
+    This function only handles the doctor-facing explanation, reusing
+    send_doctor_verified's dispatch shape (Notification row + email + push)
+    rather than a bespoke path, since there is no separate "submitted for
+    verification" notification in this codebase to reuse — verification
+    review is otherwise a manual admin-panel action, not a queued request."""
+    try:
+        from apps.notifications.tasks import send_doctor_verification_reset
+        send_doctor_verification_reset.delay(profile.user_id)
+    except Exception:
+        logger.exception(
+            'Failed to dispatch verification-reset notification for doctor %s', profile.user_id
+        )
 
 
 def replace_working_hours(workplace, items):

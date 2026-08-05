@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.appointments.serializers import DoctorBriefSerializer, PatientBriefSerializer
 
-from .models import Message, Thread
+from .models import Block, Message, Report, Thread
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -46,3 +46,17 @@ class ThreadSerializer(serializers.ModelSerializer):
         if request is None or not request.user.is_authenticated:
             return 0
         return obj.messages.filter(read_at__isnull=True).exclude(sender=request.user).count()
+
+
+class BlockSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Block
+        fields = ['id', 'blocker', 'blocked', 'reason', 'created_at']
+        read_only_fields = ['id', 'blocker', 'blocked', 'created_at']
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Report
+        fields = ['id', 'thread', 'message', 'reporter', 'reason', 'details', 'created_at']
+        read_only_fields = ['id', 'thread', 'message', 'reporter', 'created_at']

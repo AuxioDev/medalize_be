@@ -9,6 +9,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.models import log_record_access
 from apps.core.uploads import randomize_upload_filename
 from apps.users.permissions import IsPatient
 
@@ -106,8 +107,12 @@ class MedicalRecordDetailView(APIView):
             raise NotFound()
 
     def get(self, request, pk):
+        record = self._get(pk, request.user)
+        # Passive audit trail — successful single-object retrieval only
+        # (never on the list endpoint above). See apps.core.models.RecordAccessLog.
+        log_record_access(request.user, record)
         return Response(
-            MedicalRecordSerializer(self._get(pk, request.user), context={'request': request}).data
+            MedicalRecordSerializer(record, context={'request': request}).data
         )
 
     def delete(self, request, pk):

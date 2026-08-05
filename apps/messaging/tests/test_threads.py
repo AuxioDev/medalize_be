@@ -100,6 +100,63 @@ class ThreadCreateTests(MessagingTestBase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
+class ThreadCreateAppointmentStatusGateTests(MessagingTestBase):
+    """(3a) — a CANCELLED/DECLINED-only appointment history must not
+    permanently unlock a new thread; an already-existing thread stays
+    reachable regardless of what later happens to its appointment(s)."""
+
+    def setUp(self):
+        super().setUp()
+        # MessagingTestBase already created self.appointment (default
+        # pending) between self.patient/self.doctor — cancel it so the pair
+        # has *only* a cancelled appointment for these tests.
+        self.appointment.status = Appointment.STATUS_CANCELLED
+        self.appointment.save(update_fields=['status'])
+
+    def test_cancelled_only_history_cannot_open_a_new_thread(self):
+        self.as_patient()
+        res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.data['code'], 'no_shared_history')
+        self.assertFalse(Thread.objects.filter(patient=self.patient, doctor=self.doctor).exists())
+
+    def test_declined_only_history_cannot_open_a_new_thread(self):
+        self.appointment.status = Appointment.STATUS_DECLINED
+        self.appointment.save(update_fields=['status'])
+        self.as_patient()
+        res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.data['code'], 'no_shared_history')
+
+    def test_a_second_non_cancelled_appointment_still_unlocks_messaging(self):
+        self._make_appointment(starts_at=self._future_dt(14), status=Appointment.STATUS_CONFIRMED)
+        self.as_patient()
+        res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_existing_thread_stays_reachable_after_its_only_appointment_is_cancelled(self):
+        # Open the thread first, while the appointment is still pending.
+        self.appointment.status = Appointment.STATUS_PENDING
+        self.appointment.save(update_fields=['status'])
+        self.as_patient()
+        create_res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        self.assertEqual(create_res.status_code, status.HTTP_201_CREATED)
+
+        # Now cancel the only appointment between the pair — the existing
+        # thread must not retroactively lock (no delete/lock happens here at
+        # all — POST /threads/ just fetches the existing row idempotently).
+        self.appointment.status = Appointment.STATUS_CANCELLED
+        self.appointment.save(update_fields=['status'])
+        reopen_res = self.client.post(THREADS_URL, {'participant_id': str(self.doctor.id)}, format='json')
+        self.assertEqual(reopen_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(reopen_res.data['id'], create_res.data['id'])
+
+        # Sending still works too — reading/writing an existing thread isn't
+        # gated by appointment status at all.
+        res = self.client.post(messages_url(create_res.data['id']), {'body': 'still here'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+
 class ThreadListTests(MessagingTestBase):
     def test_lists_only_own_threads(self):
         self.as_patient()

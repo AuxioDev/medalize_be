@@ -323,6 +323,32 @@ def send_doctor_verified(user_id):
 
 
 @shared_task
+def send_doctor_verification_reset(user_id):
+    """Counterpart to send_doctor_verified above — dispatched when an
+    already-verified doctor edits specialization, license_number, or
+    diploma_file and apps.doctors.services.notify_verification_reset flips
+    is_verified back to False for re-review (see
+    apps.doctors.serializers.DoctorProfileWriteSerializer.update and
+    apps.doctors.views.DiplomaUploadView.post)."""
+    from apps.users.models import User
+    from .models import Notification
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return
+
+    tpl = render_template('doctor_verification_reset', recipient_language(user))
+    Notification.objects.create(
+        user=user,
+        type=Notification.TYPE_GENERAL,
+        title=tpl['title'],
+        message=tpl['body'],
+    )
+    _send_email(tpl['subject'], tpl['body'], user)
+    _send_push(user, tpl['title'], tpl['body'])
+
+
+@shared_task
 def notify_blocked_period_patients(blocked_period_id):
     from apps.appointments.models import Appointment
     from apps.doctors.models import BlockedPeriod

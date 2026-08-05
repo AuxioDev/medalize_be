@@ -2,10 +2,13 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.appointments.models import Appointment
 from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
+from apps.notifications.models import Notification
 
 User = get_user_model()
 
@@ -13,6 +16,13 @@ REGISTER_URL = '/api/auth/register/'
 LOGIN_URL = '/api/auth/login/'
 WORKPLACES_URL = '/api/doctor/workplaces/'
 BLOCKED_PERIODS_URL = '/api/doctor/blocked-periods/'
+DOCTOR_PROFILE_URL = '/api/doctor/profile/'
+DIPLOMA_UPLOAD_URL = '/api/doctor/verify/diploma/'
+
+
+def _pdf_file(name='diploma.pdf'):
+    # Validation only checks the %PDF- header, matching DiplomaUploadView.
+    return SimpleUploadedFile(name, b'%PDF-1.4\n%fake minimal pdf for tests\n', content_type='application/pdf')
 
 
 def doctor_payload(**kwargs):
@@ -513,3 +523,95 @@ class BlockedPeriodTests(DoctorAuthTestCase):
         res = self.client.get(f'{BLOCKED_PERIODS_URL}?to=99-99-99')
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(res.data['code'], 'validation_error')
+
+
+class VerificationResetOnCredentialChangeTests(DoctorAuthTestCase):
+    """Phase 3 fix: an already-verified doctor editing specialization,
+    license_number, or diploma_file drops back to unverified for re-review
+    instead of instantly appearing "verified" with an unreviewed claim."""
+
+    def setUp(self):
+        super().setUp()
+        self.assertTrue(self.doctor.doctor_profile.is_verified)
+
+    def test_patch_specialization_resets_verification(self):
+        res = self.client.patch(DOCTOR_PROFILE_URL, {'specialization': 'cardiology'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['is_verified'])
+        self.doctor.doctor_profile.refresh_from_db()
+        self.assertFalse(self.doctor.doctor_profile.is_verified)
+
+    def test_patch_license_number_resets_verification(self):
+        res = self.client.patch(DOCTOR_PROFILE_URL, {'license_number': 'NEW-LICENSE-999'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['is_verified'])
+
+    def test_patch_resets_verification_sends_notification(self):
+        self.client.patch(DOCTOR_PROFILE_URL, {'specialization': 'cardiology'}, format='json')
+        notif = Notification.objects.filter(user=self.doctor).latest('sent_at')
+        self.assertEqual(notif.title, 'Verification Reset')
+        self.assertIn('reviewed again', notif.message)
+
+    def test_patch_unrelated_field_does_not_reset_verification(self):
+        res = self.client.patch(DOCTOR_PROFILE_URL, {'bio': 'Updated bio text'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data['is_verified'])
+        self.doctor.doctor_profile.refresh_from_db()
+        self.assertTrue(self.doctor.doctor_profile.is_verified)
+
+    def test_patch_same_specialization_value_does_not_reset_verification(self):
+        current = self.doctor.doctor_profile.specialization
+        res = self.client.patch(DOCTOR_PROFILE_URL, {'specialization': current}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data['is_verified'])
+
+    def test_patch_credentials_on_unverified_profile_does_not_send_notification(self):
+        self.doctor.doctor_profile.is_verified = False
+        self.doctor.doctor_profile.save(update_fields=['is_verified'])
+        before = Notification.objects.filter(user=self.doctor).count()
+        res = self.client.patch(DOCTOR_PROFILE_URL, {'specialization': 'cardiology'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['is_verified'])
+        self.assertEqual(Notification.objects.filter(user=self.doctor).count(), before)
+
+    def test_resetting_verification_cancels_future_appointments(self):
+        """The reset reuses DoctorProfile's existing is_verified post_save
+        signal (apps.users.models.notify_doctor_verified), which already
+        cancels future pending/confirmed appointments whenever a doctor
+        loses verification — same behavior as an admin-initiated unverify,
+        now also triggered by a credential edit."""
+        patient = User.objects.create_user(
+            email='cancel-patient@test.com', password='Pass1234', role='patient',
+            first_name='Pat', last_name='Ient',
+        )
+        workplace = Workplace.objects.create(
+            doctor=self.doctor, name='Clinic', address='1 St', city='baku', type='clinic',
+        )
+        from django.utils import timezone
+        import datetime
+        starts = timezone.now() + datetime.timedelta(days=3)
+        appt = Appointment.objects.create(
+            doctor=self.doctor, patient=patient, workplace=workplace,
+            starts_at=starts, ends_at=starts + datetime.timedelta(minutes=30),
+        )
+        self.client.patch(DOCTOR_PROFILE_URL, {'specialization': 'cardiology'}, format='json')
+        appt.refresh_from_db()
+        self.assertEqual(appt.status, Appointment.STATUS_CANCELLED)
+
+    def test_diploma_reupload_on_verified_profile_resets_verification(self):
+        res = self.client.post(DIPLOMA_UPLOAD_URL, {'diploma': _pdf_file()}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.doctor.doctor_profile.refresh_from_db()
+        self.assertFalse(self.doctor.doctor_profile.is_verified)
+        notif = Notification.objects.filter(user=self.doctor).latest('sent_at')
+        self.assertEqual(notif.title, 'Verification Reset')
+
+    def test_diploma_reupload_on_unverified_profile_does_not_send_notification(self):
+        self.doctor.doctor_profile.is_verified = False
+        self.doctor.doctor_profile.save(update_fields=['is_verified'])
+        before = Notification.objects.filter(user=self.doctor).count()
+        res = self.client.post(DIPLOMA_UPLOAD_URL, {'diploma': _pdf_file()}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(Notification.objects.filter(user=self.doctor).count(), before)
+        self.doctor.doctor_profile.refresh_from_db()
+        self.assertFalse(self.doctor.doctor_profile.is_verified)

@@ -315,12 +315,31 @@ class ReviewCreateSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         appointment = self.context['appointment']
+
+        # Anti-fraud signal: a doctor gaming their own rating via patient
+        # accounts they control would have no genuine message history with
+        # those "patients" before the booking existed. Real patient/doctor
+        # contact predating the appointment (a message either side sent
+        # before starts_at) is treated as evidence against that; its
+        # absence doesn't block the review, only flags it for manual
+        # admin review. Lazy import — apps.messaging isn't a dependency of
+        # apps.appointments anywhere else, and importing it at module level
+        # here would risk a circular import against apps.messaging.views
+        # (which imports apps.appointments.models.Appointment).
+        from apps.messaging.models import Message
+        had_prior_contact = Message.objects.filter(
+            thread__patient=appointment.patient,
+            thread__doctor=appointment.doctor,
+            created_at__lt=appointment.starts_at,
+        ).exists()
+
         return Review.objects.create(
             appointment=appointment,
             doctor=appointment.doctor,
             patient=appointment.patient,
             rating=validated_data['rating'],
             comment=validated_data.get('comment', ''),
+            needs_manual_review=not had_prior_contact,
         )
 
 

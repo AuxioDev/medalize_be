@@ -248,3 +248,50 @@ class RecordListDetailTests(MedicalRecordTestBase):
         res = self.client.delete(_detail_url(create_res.data['id']))
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(MedicalRecord.objects.filter(pk=create_res.data['id']).exists())
+
+
+class RecordAccessLogTests(MedicalRecordTestBase):
+    """Passive audit trail (apps.core.models.RecordAccessLog) — a successful
+    GET on the record detail endpoint creates a log row; nothing else does."""
+
+    def test_get_creates_an_access_log_row(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.contenttypes.models import ContentType
+        from apps.core.models import RecordAccessLog
+
+        create_res = self._upload(_pdf_file())
+        record_id = create_res.data['id']
+
+        self.client.get(_detail_url(record_id))
+
+        log = RecordAccessLog.objects.get()
+        self.assertEqual(log.accessed_by, get_user_model().objects.get(email='patient@test.com'))
+        self.assertEqual(log.content_type, ContentType.objects.get_for_model(MedicalRecord))
+        self.assertEqual(str(log.object_id), record_id)
+        self.assertEqual(log.action, RecordAccessLog.ACTION_VIEW)
+
+    def test_failed_get_does_not_create_a_log_row(self):
+        from apps.core.models import RecordAccessLog
+
+        create_res = self._upload(_pdf_file())
+        other_token = _register_and_login(self.client, patient_payload(email='no-access@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+
+        res = self.client.get(_detail_url(create_res.data['id']))
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(RecordAccessLog.objects.exists())
+
+    def test_list_endpoint_does_not_create_log_rows(self):
+        from apps.core.models import RecordAccessLog
+
+        self._upload(_pdf_file())
+        self.client.get(RECORDS_URL)
+        self.assertFalse(RecordAccessLog.objects.exists())
+
+    def test_each_get_creates_its_own_row(self):
+        from apps.core.models import RecordAccessLog
+
+        create_res = self._upload(_pdf_file())
+        self.client.get(_detail_url(create_res.data['id']))
+        self.client.get(_detail_url(create_res.data['id']))
+        self.assertEqual(RecordAccessLog.objects.count(), 2)

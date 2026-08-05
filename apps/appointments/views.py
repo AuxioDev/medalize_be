@@ -23,6 +23,7 @@ from apps.doctors.models import BlockedPeriod, Workplace, WorkingHours
 from apps.subscriptions.entitlements import entitled_doctor_filter, limits_for, promoted_rank_case
 from apps.users.permissions import IsDoctor, IsPatient
 from .models import Appointment, CANCELLATION_WINDOW_HOURS, Favorite, Review, Waitlist
+from .throttles import ReviewCreateRateThrottle
 from .serializers import (
     AppointmentSerializer,
     AppointmentStatusSerializer,
@@ -820,6 +821,16 @@ class DoctorAppointmentNotesView(APIView):
 
 class AppointmentReviewView(APIView):
     permission_classes = [IsPatient]
+
+    def get_throttles(self):
+        # Only rate-limit creation (POST) by IP, on top of the default
+        # throttle classes — PATCH/DELETE touch a review the patient already
+        # owns and aren't the fraud vector this throttle exists for (see
+        # .throttles.ReviewCreateRateThrottle).
+        throttles = super().get_throttles()
+        if self.request.method == 'POST':
+            throttles.append(ReviewCreateRateThrottle())
+        return throttles
 
     def post(self, request, pk):
         try:

@@ -14,4 +14,7 @@ urlpatterns = [
         views.ThreadUnreadCountView.as_view(),
         name='messaging-thread-unread-count',
     ),
+    path('threads/<uuid:pk>/block/', views.ThreadBlockView.as_view(), name='messaging-thread-block'),
+    path('threads/<uuid:pk>/report/', views.ThreadReportView.as_view(), name='messaging-thread-report'),
+    path('messages/<uuid:pk>/report/', views.MessageReportView.as_view(), name='messaging-message-report'),
 ]

@@ -998,5 +998,37 @@
       "title": "关联已结束",
       "body": "您与 {hospital_name} 在 Medalize 上的关联已结束。您的工作地点和预约不受影响。"
     }
+  },
+  "doctor_verification_reset": {
+    "en": {
+      "subject": "Your Medalize Verification Needs Review Again",
+      "title": "Verification Reset",
+      "body": "You changed your specialization, license number, or diploma, so your profile needs to be reviewed again before you reappear in verified search results. We will notify you once it is approved."
+    },
+    "ru": {
+      "subject": "Ваша верификация Medalize требует повторной проверки",
+      "title": "Верификация сброшена",
+      "body": "Вы изменили специализацию, номер лицензии или диплом, поэтому ваш профиль должен быть проверен повторно, прежде чем вы снова появитесь в результатах поиска среди подтверждённых врачей. Мы сообщим вам, когда он будет одобрен."
+    },
+    "az": {
+      "subject": "Medalize təsdiqiniz yenidən yoxlanılmalıdır",
+      "title": "Təsdiq sıfırlandı",
+      "body": "İxtisasınızı, lisenziya nömrənizi və ya diplomunuzu dəyişdiyiniz üçün profiliniz təsdiqlənmiş axtarış nəticələrində yenidən görünməzdən əvvəl yenidən nəzərdən keçirilməlidir. Təsdiqləndikdən sonra sizə bildiriş göndəriləcək."
+    },
+    "tr": {
+      "subject": "Medalize Onayınız Yeniden İncelenmeli",
+      "title": "Onay Sıfırlandı",
+      "body": "Uzmanlığınızı, lisans numaranızı veya diplomanızı değiştirdiğiniz için, onaylı arama sonuçlarında tekrar görünmeden önce profilinizin yeniden incelenmesi gerekiyor. Onaylandığında size bildirim göndereceğiz."
+    },
+    "fr": {
+      "subject": "Votre vérification Medalize doit être réexaminée",
+      "title": "Vérification réinitialisée",
+      "body": "Vous avez modifié votre spécialité, votre numéro de licence ou votre diplôme. Votre profil doit donc être réexaminé avant de réapparaître dans les résultats de recherche vérifiés. Nous vous informerons dès son approbation."
+    },
+    "zh": {
+      "subject": "您的 Medalize 认证需要重新审核",
+      "title": "认证已重置",
+      "body": "由于您更改了专业、执业证号或文凭，您的资料需要重新审核后才能再次出现在已验证的搜索结果中。审核通过后我们会通知您。"
+    }
   }
 }

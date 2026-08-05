@@ -15,8 +15,8 @@ from apps.appointments.models import Appointment
 from apps.subscriptions.entitlements import limits_for
 from apps.users.models import User
 
-from .models import Message, Thread
-from .serializers import MessageSerializer, ThreadSerializer
+from .models import Block, Message, Report, Thread
+from .serializers import BlockSerializer, MessageSerializer, ReportSerializer, ThreadSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,16 @@ def _messaging_enabled():
     # message. See apps/assistant/checks.py::check_assistant_encryption_key
     # (assistant.W001), which already documents this exact risk.
     return bool(getattr(settings, 'ASSISTANT_ENCRYPTION_KEY', ''))
+
+
+def _blocked_either_way(a, b):
+    """True if `a` blocked `b` or `b` blocked `a` — either side may have
+    blocked the other, and both directions must be checked before letting
+    a message through or a new thread open (see (b) in the Phase 3
+    messaging fix)."""
+    return Block.objects.filter(
+        Q(blocker=a, blocked=b) | Q(blocker=b, blocked=a)
+    ).exists()
 
 
 class ThreadListCreateView(APIView):
@@ -99,20 +109,30 @@ class ThreadListCreateView(APIView):
         else:
             raise PermissionDenied({'code': 'permission_denied'})
 
-        # Contact is only established once a real appointment has been
-        # booked between the two, regardless of its status.
-        if not Appointment.objects.filter(patient=patient, doctor=doctor).exists():
-            raise PermissionDenied({
-                'code': 'no_shared_history',
-                'detail': 'You need a shared appointment history to message this user.',
-            })
-
         thread = Thread.objects.filter(patient=patient, doctor=doctor).first()
         created = thread is None
         if created:
-            # Gate only opening a brand-new thread — a doctor whose plan has
-            # since dropped chat (Başlanğıc, or a lapsed/expired
-            # subscription) keeps every conversation they already have.
+            # These checks gate only opening a brand-new thread — an already
+            # existing thread stays reachable even if e.g. its only
+            # appointment is later cancelled, or the doctor's plan has since
+            # dropped chat (Başlanğıc, or a lapsed/expired subscription).
+            # Contact is only established once a real appointment was booked
+            # between the two that didn't end up cancelled/declined — a
+            # single never-happened appointment shouldn't permanently unlock
+            # messaging (previously this checked .exists() with no status
+            # exclusion at all).
+            if not Appointment.objects.filter(patient=patient, doctor=doctor).exclude(
+                status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_DECLINED]
+            ).exists():
+                raise PermissionDenied({
+                    'code': 'no_shared_history',
+                    'detail': 'You need a shared appointment history to message this user.',
+                })
+            if _blocked_either_way(patient, doctor):
+                raise PermissionDenied({
+                    'code': 'blocked',
+                    'detail': 'You cannot start a conversation with this user.',
+                })
             if not limits_for(doctor)['chat']:
                 raise PermissionDenied({'code': 'chat_unavailable'})
             thread = Thread.objects.create(patient=patient, doctor=doctor)
@@ -167,6 +187,15 @@ class ThreadMessageListCreateView(APIView):
             )
         thread = self._get_thread(request, pk)
 
+        other = thread.doctor if request.user.id == thread.patient_id else thread.patient
+        if _blocked_either_way(request.user, other):
+            # Explicit, not a silent drop — either side may have blocked the
+            # other (see (b) in the Phase 3 messaging fix).
+            raise PermissionDenied({
+                'code': 'blocked',
+                'detail': 'You cannot send messages in this conversation.',
+            })
+
         body = request.data.get('body')
         if not isinstance(body, str) or not body.strip():
             raise ValidationError({'body': ['This field is required.']})
@@ -205,3 +234,98 @@ class ThreadUnreadCountView(APIView):
             .count()
         )
         return Response({'unread_count': count})
+
+
+class ThreadBlockView(APIView):
+    """Block/unblock the other participant of a thread — either patient or
+    doctor may do this to the other. See (b) in the Phase 3 messaging fix:
+    once blocked, the blocked party can't send new messages in this (or any)
+    shared thread and can't open a new one with `blocked`."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_thread_and_other(self, request, pk):
+        try:
+            thread = Thread.objects.select_related('patient', 'doctor').get(pk=pk)
+        except (Thread.DoesNotExist, DjangoValidationError, ValueError, TypeError):
+            raise NotFound()
+        # Not 403 — same reasoning as ThreadMessageListCreateView._get_thread.
+        if request.user not in (thread.patient, thread.doctor):
+            raise NotFound()
+        other = thread.doctor if request.user.id == thread.patient_id else thread.patient
+        return thread, other
+
+    def post(self, request, pk):
+        _thread, other = self._get_thread_and_other(request, pk)
+        reason = request.data.get('reason', '')
+        reason = reason.strip() if isinstance(reason, str) else ''
+
+        block, created = Block.objects.get_or_create(
+            blocker=request.user, blocked=other, defaults={'reason': reason},
+        )
+        if not created and reason and not block.reason:
+            block.reason = reason
+            block.save(update_fields=['reason'])
+
+        return Response(
+            BlockSerializer(block).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    def delete(self, request, pk):
+        _thread, other = self._get_thread_and_other(request, pk)
+        deleted, _counts = Block.objects.filter(blocker=request.user, blocked=other).delete()
+        if not deleted:
+            raise NotFound()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ThreadReportView(APIView):
+    """Report a thread (the counterpart's behavior in general, not tied to
+    one message) for admin follow-up. See MessageReportView below for
+    reporting a specific message instead — same shape, mirroring
+    apps.assistant.views.MessageFlagView, just a distinct model since a
+    thread can be reported more than once for different reasons."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            thread = Thread.objects.select_related('patient', 'doctor').get(pk=pk)
+        except (Thread.DoesNotExist, DjangoValidationError, ValueError, TypeError):
+            raise NotFound()
+        if request.user not in (thread.patient, thread.doctor):
+            raise NotFound()
+
+        serializer = ReportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        report = Report.objects.create(
+            thread=thread, reporter=request.user, **serializer.validated_data
+        )
+        return Response(ReportSerializer(report).data, status=status.HTTP_201_CREATED)
+
+
+class MessageReportView(APIView):
+    """Report one specific message — see ThreadReportView above."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            message = (
+                Message.objects
+                .select_related('thread', 'thread__patient', 'thread__doctor')
+                .get(pk=pk)
+            )
+        except (Message.DoesNotExist, DjangoValidationError, ValueError, TypeError):
+            raise NotFound()
+        if request.user not in (message.thread.patient, message.thread.doctor):
+            raise NotFound()
+
+        serializer = ReportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        report = Report.objects.create(
+            thread=message.thread, message=message, reporter=request.user,
+            **serializer.validated_data,
+        )
+        return Response(ReportSerializer(report).data, status=status.HTTP_201_CREATED)

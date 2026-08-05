@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Message, Thread
+from .models import Block, Message, Report, Thread
 
 
 @admin.register(Thread)
@@ -19,4 +19,21 @@ class MessageAdmin(admin.ModelAdmin):
     # is the only practical moderation entry point.
     search_fields = ['sender__email']
     raw_id_fields = ['thread', 'sender']
+    ordering = ['-created_at']
+
+
+@admin.register(Block)
+class BlockAdmin(admin.ModelAdmin):
+    list_display = ['blocker', 'blocked', 'created_at']
+    search_fields = ['blocker__email', 'blocked__email']
+    raw_id_fields = ['blocker', 'blocked']
+    ordering = ['-created_at']
+
+
+@admin.register(Report)
+class ReportAdmin(admin.ModelAdmin):
+    list_display = ['reporter', 'thread', 'message', 'reason', 'created_at']
+    list_filter = ['reason']
+    search_fields = ['reporter__email', 'thread__patient__email', 'thread__doctor__email']
+    raw_id_fields = ['thread', 'message', 'reporter']
     ordering = ['-created_at']

@@ -20,7 +20,7 @@ class FavoriteAdmin(admin.ModelAdmin):
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    list_display = ['doctor', 'patient', 'rating', 'created_at']
-    list_filter = ['rating']
+    list_display = ['doctor', 'patient', 'rating', 'needs_manual_review', 'created_at']
+    list_filter = ['rating', 'needs_manual_review']
     search_fields = ['doctor__email', 'patient__email']
     ordering = ['-created_at']

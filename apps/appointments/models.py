@@ -202,6 +202,13 @@ class Review(models.Model):
     )
     rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField(blank=True)
+    # Anti-fraud signal, not a block: set when the review is created and no
+    # message thread/messages exist between this patient/doctor pair
+    # predating the appointment's starts_at — i.e. no evidence of real prior
+    # contact, which is what a doctor gaming their own rating via
+    # self-controlled patient accounts would look like. Surfaced in Django
+    # admin for manual follow-up (see ReviewCreateSerializer.create).
+    needs_manual_review = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

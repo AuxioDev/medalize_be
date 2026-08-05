@@ -254,6 +254,71 @@ class GetPrescriptionTests(PrescriptionTestBase):
         self.assertEqual(res.data['count'], 0)
 
 
+class PrescriptionAccessLogTests(PrescriptionTestBase):
+    """Passive audit trail (apps.core.models.RecordAccessLog) — both GET
+    endpoints that return a single Prescription (by appointment id, and by
+    prescription id) create a log row on success; the list endpoint never
+    does."""
+
+    def _issue(self):
+        self.as_doctor()
+        res = self.client.post(
+            _prescription_url(self.completed_appointment.id), {'items': _items_payload()}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        return res.data['id']
+
+    def test_appointment_prescription_get_creates_a_log_row(self):
+        from apps.core.models import RecordAccessLog
+
+        self._issue()
+        self.as_patient()
+        self.client.get(_prescription_url(self.completed_appointment.id))
+
+        log = RecordAccessLog.objects.get()
+        self.assertEqual(log.accessed_by, self.patient)
+        self.assertEqual(log.action, RecordAccessLog.ACTION_VIEW)
+
+    def test_prescription_detail_get_creates_a_log_row(self):
+        from apps.core.models import RecordAccessLog
+
+        prescription_id = self._issue()
+        self.as_doctor()
+        self.client.get(_detail_url(prescription_id))
+
+        log = RecordAccessLog.objects.get()
+        self.assertEqual(log.accessed_by, self.doctor)
+        self.assertEqual(str(log.object_id), prescription_id)
+
+    def test_failed_get_does_not_create_a_log_row(self):
+        from apps.core.models import RecordAccessLog
+
+        self._issue()
+        other_token = _register_and_login(self.client, patient_payload(email='no-rx-access@test.com'))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {other_token}')
+
+        res = self.client.get(_prescription_url(self.completed_appointment.id))
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(RecordAccessLog.objects.exists())
+
+    def test_list_endpoint_does_not_create_log_rows(self):
+        from apps.core.models import RecordAccessLog
+
+        self._issue()
+        self.as_patient()
+        self.client.get(LIST_URL)
+        self.assertFalse(RecordAccessLog.objects.exists())
+
+    def test_get_via_both_endpoints_creates_two_separate_rows(self):
+        from apps.core.models import RecordAccessLog
+
+        prescription_id = self._issue()
+        self.as_patient()
+        self.client.get(_prescription_url(self.completed_appointment.id))
+        self.client.get(_detail_url(prescription_id))
+        self.assertEqual(RecordAccessLog.objects.count(), 2)
+
+
 class ApplyPrescriptionTests(PrescriptionTestBase):
     def _issue(self):
         self.as_doctor()

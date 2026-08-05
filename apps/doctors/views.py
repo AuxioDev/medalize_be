@@ -33,6 +33,7 @@ from .services import (
     DEFAULT_START as _DEFAULT_START,
     full_week_hours as _full_week_hours,
     invalidate_doctor_slots as _invalidate_doctor_slots,
+    notify_verification_reset as _notify_verification_reset,
     replace_working_hours as _replace_working_hours,
     validated_hours_items as _validated_hours_items,
 )
@@ -361,8 +362,20 @@ class DiplomaUploadView(APIView):
 
         profile, _ = DoctorProfile.objects.get_or_create(user=request.user)
         old_diploma = profile.diploma_file
+        # A diploma swap is a credential change just like specialization/
+        # license_number (see DoctorProfileWriteSerializer.update) — an
+        # already-verified doctor re-uploading a diploma must drop back to
+        # unverified for re-review, not keep the old review's verified
+        # status attached to a new, unreviewed document.
+        was_verified = profile.is_verified
         profile.diploma_file = file
-        profile.save(update_fields=['diploma_file'])
+        update_fields = ['diploma_file']
+        if was_verified:
+            profile.is_verified = False
+            update_fields.append('is_verified')
+        profile.save(update_fields=update_fields)
+        if was_verified:
+            _notify_verification_reset(profile)
         if old_diploma and old_diploma.name and old_diploma.name != profile.diploma_file.name:
             try:
                 old_diploma.delete(save=False)

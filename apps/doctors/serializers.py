@@ -10,6 +10,13 @@ from .models import BlockedPeriod, Workplace, WorkingHours
 _SLOT_DURATIONS = [15, 20, 30, 45, 60]
 _CANCELLATION_WINDOWS = [1, 2, 6, 12, 24]
 
+# Fields an admin's original verification review actually covered. Editing
+# any of these on an already-verified profile invalidates that review — see
+# DoctorProfileWriteSerializer.update() below. diploma_file isn't listed
+# here: it's written by DiplomaUploadView, not this serializer (see that
+# view for the equivalent reset).
+_CREDENTIAL_FIELDS = ('specialization', 'license_number')
+
 
 class DoctorProfileWriteSerializer(serializers.ModelSerializer):
     specialization = serializers.ChoiceField(
@@ -36,6 +43,27 @@ class DoctorProfileWriteSerializer(serializers.ModelSerializer):
                 'Cancellation window must be one of 1, 2, 6, 12 or 24 hours.'
             )
         return value
+
+    def update(self, instance, validated_data):
+        # Computed from validated_data vs. the pre-update instance — same
+        # shape as WorkplaceSerializer.update()'s city_changed/hospital_changed
+        # checks above, for the same reason (super().update() below mutates
+        # `instance` in place, so the comparison has to happen first).
+        was_verified = instance.is_verified
+        credentials_changed = any(
+            field in validated_data and validated_data[field] != getattr(instance, field)
+            for field in _CREDENTIAL_FIELDS
+        )
+        profile = super().update(instance, validated_data)
+        if was_verified and credentials_changed:
+            profile.is_verified = False
+            profile.save(update_fields=['is_verified'])
+            # Local import — apps.doctors.services imports this module
+            # (WorkingHoursReplaceItemSerializer) at its own top level, so a
+            # top-level import here would be circular.
+            from .services import notify_verification_reset
+            notify_verification_reset(profile)
+        return profile
 
 
 class DoctorProfileReadSerializer(serializers.ModelSerializer):

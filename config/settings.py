@@ -202,6 +202,10 @@ REST_FRAMEWORK = {
         # isn't in the registry) — new rows are immediately visible to every
         # other doctor, so this is capped tighter than most write actions.
         'hospital_create': '5/hour',
+        # Anti-fraud: caps how many reviews can be created from one IP in a
+        # day, independent of which patient account is used — see
+        # apps.appointments.throttles.ReviewCreateRateThrottle.
+        'review_create': '5/day',
     },
 }
 
@@ -231,7 +235,7 @@ EMAIL_PORT = env.int('EMAIL_PORT', default=587)
 EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@medalize.com')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@medalize.az')
 
 # ── Social login (Google / Apple id_token verification) ──────────────────────
 # Comma-separated OAuth client ids accepted as `aud` in Google id_tokens
