@@ -206,6 +206,11 @@ REST_FRAMEWORK = {
         # day, independent of which patient account is used — see
         # apps.appointments.throttles.ReviewCreateRateThrottle.
         'review_create': '5/day',
+        # apps.family.views.DependentConsentRejectView — a no-login, public,
+        # token-based page (see apps.family.throttles.
+        # DependentConsentRateThrottle for why this is defense-in-depth, not
+        # the primary defense against token guessing).
+        'dependent_consent': '20/hour',
     },
 }
 

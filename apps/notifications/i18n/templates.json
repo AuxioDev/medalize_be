@@ -1030,5 +1030,121 @@
       "title": "认证已重置",
       "body": "由于您更改了专业、执业证号或文凭，您的资料需要重新审核后才能再次出现在已验证的搜索结果中。审核通过后我们会通知您。"
     }
+  },
+  "dependent_added_notice": {
+    "en": {
+      "subject": "You were added as a family member on Medalize",
+      "body": "{account_holder_name} added you ({dependent_name}) as a family member on their Medalize account. This lets them book appointments and manage medical records and prescriptions on your behalf.\n\nIf you did not agree to this, you can disconnect this connection now — no account or login required:\n{reject_url}\n\nIf this is expected, you don't need to do anything."
+    },
+    "ru": {
+      "subject": "Вас добавили как члена семьи в Medalize",
+      "body": "{account_holder_name} добавил(а) вас ({dependent_name}) как члена семьи в своём аккаунте Medalize. Это позволяет им записывать вас на приём и управлять медицинскими записями и рецептами от вашего имени.\n\nЕсли вы не давали на это согласия, вы можете отключить эту связь прямо сейчас — без аккаунта и входа в систему:\n{reject_url}\n\nЕсли всё в порядке, никаких действий не требуется."
+    },
+    "az": {
+      "subject": "Sizi Medalize-də ailə üzvü kimi əlavə etdilər",
+      "body": "{account_holder_name} sizi ({dependent_name}) öz Medalize hesabında ailə üzvü kimi əlavə etdi. Bu, onlara sizin adınızdan həkimə randevu almağa, tibbi qeydləri və reseptləri idarə etməyə imkan verir.\n\nBuna razı deyilsinizsə, indi bu əlaqəni kəsə bilərsiniz — hesab və ya giriş tələb olunmur:\n{reject_url}\n\nBu sizin üçün normaldırsa, heç nə etməyə ehtiyac yoxdur."
+    },
+    "tr": {
+      "subject": "Medalize'de bir aile üyesi olarak eklendiniz",
+      "body": "{account_holder_name} sizi ({dependent_name}) kendi Medalize hesabına aile üyesi olarak ekledi. Bu, onların sizin adınıza randevu almasına, tıbbi kayıtlarınızı ve reçetelerinizi yönetmesine olanak tanır.\n\nBunu kabul etmediyseniz, bu bağlantıyı şimdi kesebilirsiniz — hesap veya giriş gerekmez:\n{reject_url}\n\nEğer bu sizin için uygunsa, herhangi bir işlem yapmanıza gerek yoktur."
+    },
+    "fr": {
+      "subject": "Vous avez été ajouté(e) comme membre de la famille sur Medalize",
+      "body": "{account_holder_name} vous a ajouté(e) ({dependent_name}) comme membre de la famille sur son compte Medalize. Cela lui permet de prendre des rendez-vous et de gérer vos dossiers médicaux et ordonnances en votre nom.\n\nSi vous n'avez pas donné votre accord, vous pouvez supprimer cette connexion dès maintenant — aucun compte ni connexion requis :\n{reject_url}\n\nSi cela vous convient, aucune action n'est nécessaire."
+    },
+    "zh": {
+      "subject": "您已被添加为 Medalize 上的家庭成员",
+      "body": "{account_holder_name} 已将您（{dependent_name}）添加为其 Medalize 账户中的家庭成员。这使他们能够代表您预约就诊、管理病历和处方。\n\n如果您不同意，您现在就可以断开此关联——无需账户或登录：\n{reject_url}\n\n如果这没有问题，您无需采取任何操作。"
+    }
+  },
+  "dependent_consent_confirm_page": {
+    "en": {
+      "heading": "You were added as a family member",
+      "body": "{account_holder_name} added you as a family member on Medalize, which lets them manage appointments, medical records, and prescriptions on your behalf.",
+      "note": "If this is fine with you, no action is needed — you can simply close this page.",
+      "button": "I did not agree — disconnect me"
+    },
+    "ru": {
+      "heading": "Вас добавили как члена семьи",
+      "body": "{account_holder_name} добавил(а) вас как члена семьи в Medalize, что позволяет им управлять записями на приём, медицинскими данными и рецептами от вашего имени.",
+      "note": "Если вас это устраивает, никаких действий не требуется — можно просто закрыть эту страницу.",
+      "button": "Я не давал(а) согласия — отключить меня"
+    },
+    "az": {
+      "heading": "Siz ailə üzvü kimi əlavə edildiniz",
+      "body": "{account_holder_name} sizi Medalize-də ailə üzvü kimi əlavə etdi, bu da onlara sizin adınızdan randevuları, tibbi qeydləri və reseptləri idarə etməyə imkan verir.",
+      "note": "Bu sizə uyğundursa, heç bir əməliyyat tələb olunmur — sadəcə bu səhifəni bağlaya bilərsiniz.",
+      "button": "Razı deyildim — məni ayırın"
+    },
+    "tr": {
+      "heading": "Bir aile üyesi olarak eklendiniz",
+      "body": "{account_holder_name} sizi Medalize'de aile üyesi olarak ekledi; bu da onların sizin adınıza randevuları, tıbbi kayıtları ve reçeteleri yönetmesine olanak tanır.",
+      "note": "Bu sizin için uygunsa herhangi bir işlem yapmanıza gerek yok — bu sayfayı kapatabilirsiniz.",
+      "button": "Onaylamıyorum — bağlantımı kaldırın"
+    },
+    "fr": {
+      "heading": "Vous avez été ajouté(e) comme membre de la famille",
+      "body": "{account_holder_name} vous a ajouté(e) comme membre de la famille sur Medalize, ce qui lui permet de gérer les rendez-vous, dossiers médicaux et ordonnances en votre nom.",
+      "note": "Si cela vous convient, aucune action n'est requise — vous pouvez simplement fermer cette page.",
+      "button": "Je n'étais pas d'accord — déconnectez-moi"
+    },
+    "zh": {
+      "heading": "您已被添加为家庭成员",
+      "body": "{account_holder_name} 已将您添加为 Medalize 上的家庭成员，这使他们能够代表您管理预约、病历和处方。",
+      "note": "如果您对此没有异议，无需任何操作——您可以直接关闭此页面。",
+      "button": "我不同意——断开我的关联"
+    }
+  },
+  "dependent_consent_done_page": {
+    "en": {
+      "heading": "Connection removed",
+      "body": "This connection has been removed. {account_holder_name} can no longer manage a profile on your behalf."
+    },
+    "ru": {
+      "heading": "Связь удалена",
+      "body": "Эта связь была удалена. {account_holder_name} больше не может управлять профилем от вашего имени."
+    },
+    "az": {
+      "heading": "Əlaqə ləğv edildi",
+      "body": "Bu əlaqə ləğv edildi. {account_holder_name} artıq sizin adınızdan profili idarə edə bilməz."
+    },
+    "tr": {
+      "heading": "Bağlantı kaldırıldı",
+      "body": "Bu bağlantı kaldırıldı. {account_holder_name} artık sizin adınıza bir profili yönetemez."
+    },
+    "fr": {
+      "heading": "Connexion supprimée",
+      "body": "Cette connexion a été supprimée. {account_holder_name} ne peut plus gérer de profil en votre nom."
+    },
+    "zh": {
+      "heading": "关联已移除",
+      "body": "此关联已被移除。{account_holder_name} 将无法再代表您管理该档案。"
+    }
+  },
+  "dependent_consent_invalid_page": {
+    "en": {
+      "heading": "Link no longer valid",
+      "body": "This link has already been used, is invalid, or has expired."
+    },
+    "ru": {
+      "heading": "Ссылка больше недействительна",
+      "body": "Эта ссылка уже была использована, недействительна или истекла."
+    },
+    "az": {
+      "heading": "Keçid artıq etibarsızdır",
+      "body": "Bu keçid artıq istifadə olunub, etibarsızdır və ya vaxtı bitib."
+    },
+    "tr": {
+      "heading": "Bağlantının süresi doldu",
+      "body": "Bu bağlantı daha önce kullanılmış, geçersiz veya süresi dolmuş."
+    },
+    "fr": {
+      "heading": "Lien invalide",
+      "body": "Ce lien a déjà été utilisé, est invalide ou a expiré."
+    },
+    "zh": {
+      "heading": "链接已失效",
+      "body": "此链接已被使用、无效或已过期。"
+    }
   }
 }
