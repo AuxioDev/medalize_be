@@ -92,11 +92,12 @@ def notify_verification_reset(profile):
     """Tell a doctor their profile dropped out of verified status because
     they edited a credential field (specialization, license number, or
     diploma) that the original admin review covered. Called after the
-    caller has already flipped ``profile.is_verified`` to False and saved —
-    that save fires apps.users.models.notify_doctor_verified's post_save
-    signal, which cancels the doctor's future pending/confirmed appointments
-    the same way an admin-initiated unverify does (a credential swap
-    shouldn't leave stale bookings under a no-longer-reviewed identity).
+    caller has already flipped ``profile.is_verified`` to False (with
+    ``_verification_reset_skip_cascade`` set first) and saved. Unlike an
+    admin-initiated unverify, this does *not* cancel the doctor's existing
+    future appointments — see apps.users.models.notify_doctor_verified for
+    why a self-service edit is deliberately treated more gently; it only
+    drops the doctor out of verified search/booking until re-review.
     This function only handles the doctor-facing explanation, reusing
     send_doctor_verified's dispatch shape (Notification row + email + push)
     rather than a bespoke path, since there is no separate "submitted for

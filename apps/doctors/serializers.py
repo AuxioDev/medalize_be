@@ -57,6 +57,11 @@ class DoctorProfileWriteSerializer(serializers.ModelSerializer):
         profile = super().update(instance, validated_data)
         if was_verified and credentials_changed:
             profile.is_verified = False
+            # Opt out of apps.users.models.notify_doctor_verified's
+            # appointment-cancellation cascade — see that signal for why a
+            # self-service credential edit shouldn't nuke already-confirmed
+            # bookings the way an admin-initiated unverify does.
+            profile._verification_reset_skip_cascade = True
             profile.save(update_fields=['is_verified'])
             # Local import — apps.doctors.services imports this module
             # (WorkingHoursReplaceItemSerializer) at its own top level, so a

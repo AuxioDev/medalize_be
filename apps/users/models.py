@@ -427,4 +427,20 @@ def notify_doctor_verified(sender, instance, created, **kwargs):
         except Exception:
             logger.exception('Failed to dispatch verification notification for doctor %s', instance.user_id)
     elif original is True and instance.is_verified is False:
-        cancel_future_appointments_for_doctor(instance.user)
+        # A credential edit (apps.doctors.serializers.
+        # DoctorProfileWriteSerializer.update / apps.doctors.views.
+        # DiplomaUploadView) also flips is_verified False through this same
+        # signal, but it isn't a trust/safety action the way an admin
+        # unverify (apps.users.admin.DoctorProfileAdmin.unverify_doctors) is
+        # — the doctor edited their own profile, nobody flagged a problem.
+        # Cancelling appointments a patient booked in good faith while the
+        # prior credentials were genuinely reviewed would do real harm
+        # (surprise cancellation + refund/rebook) for what might be a one-
+        # character license-number typo fix. New bookings are already
+        # blocked until re-review (is_verified gates doctor search/booking
+        # everywhere), so that's sufficient — only an actual admin unverify
+        # cascades into cancelling existing appointments. Those callers set
+        # this transient attribute before saving to opt out; do not add it
+        # anywhere else without the same reasoning.
+        if not getattr(instance, '_verification_reset_skip_cascade', False):
+            cancel_future_appointments_for_doctor(instance.user)

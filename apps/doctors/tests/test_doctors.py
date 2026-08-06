@@ -574,12 +574,16 @@ class VerificationResetOnCredentialChangeTests(DoctorAuthTestCase):
         self.assertFalse(res.data['is_verified'])
         self.assertEqual(Notification.objects.filter(user=self.doctor).count(), before)
 
-    def test_resetting_verification_cancels_future_appointments(self):
-        """The reset reuses DoctorProfile's existing is_verified post_save
-        signal (apps.users.models.notify_doctor_verified), which already
-        cancels future pending/confirmed appointments whenever a doctor
-        loses verification — same behavior as an admin-initiated unverify,
-        now also triggered by a credential edit."""
+    def test_resetting_verification_does_not_cancel_future_appointments(self):
+        """A credential-edit reset drops the doctor out of verified search/
+        booking (new bookings are blocked until re-review), but must NOT
+        cancel appointments patients already booked in good faith — that's
+        reserved for a genuine admin-initiated unverify (see
+        test_admin_unverify_cancels_future_appointments below). Fixed after
+        the original Phase 3 implementation reused the cancellation-cascade
+        signal unconditionally, which meant a doctor fixing a one-character
+        license-number typo would surprise-cancel and refund every patient's
+        upcoming booking."""
         patient = User.objects.create_user(
             email='cancel-patient@test.com', password='Pass1234', role='patient',
             first_name='Pat', last_name='Ient',
@@ -593,8 +597,44 @@ class VerificationResetOnCredentialChangeTests(DoctorAuthTestCase):
         appt = Appointment.objects.create(
             doctor=self.doctor, patient=patient, workplace=workplace,
             starts_at=starts, ends_at=starts + datetime.timedelta(minutes=30),
+            status=Appointment.STATUS_CONFIRMED,
         )
         self.client.patch(DOCTOR_PROFILE_URL, {'specialization': 'cardiology'}, format='json')
+        appt.refresh_from_db()
+        self.assertEqual(appt.status, Appointment.STATUS_CONFIRMED)
+
+    def test_admin_unverify_cancels_future_appointments(self):
+        """Regression guard for the distinction the fix above depends on: a
+        genuine admin-initiated unverify (apps.users.admin.DoctorProfileAdmin.
+        unverify_doctors's exact save shape — is_verified flipped False with
+        no _verification_reset_skip_cascade set) must still cancel future
+        pending/confirmed appointments, unlike the credential-edit path
+        tested above."""
+        patient = User.objects.create_user(
+            email='admin-unverify-patient@test.com', password='Pass1234', role='patient',
+            first_name='Pat', last_name='Ient',
+        )
+        workplace = Workplace.objects.create(
+            doctor=self.doctor, name='Clinic', address='1 St', city='baku', type='clinic',
+        )
+        from django.utils import timezone
+        import datetime
+        starts = timezone.now() + datetime.timedelta(days=3)
+        appt = Appointment.objects.create(
+            doctor=self.doctor, patient=patient, workplace=workplace,
+            starts_at=starts, ends_at=starts + datetime.timedelta(minutes=30),
+            status=Appointment.STATUS_CONFIRMED,
+        )
+        # Fresh fetch, not self.doctor.doctor_profile — that in-memory
+        # instance's _original_is_verified was captured back in setUp()
+        # (False, before it was verified) and never refreshed, so reusing
+        # it here wouldn't actually exercise the True->False signal branch
+        # this test targets. apps.users.admin.DoctorProfileAdmin.
+        # unverify_doctors hits this same "fresh queryset" shape for real.
+        from apps.users.models import DoctorProfile
+        profile = DoctorProfile.objects.get(pk=self.doctor.doctor_profile.pk)
+        profile.is_verified = False
+        profile.save(update_fields=['is_verified'])
         appt.refresh_from_db()
         self.assertEqual(appt.status, Appointment.STATUS_CANCELLED)
 

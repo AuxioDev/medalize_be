@@ -373,6 +373,10 @@ class DiplomaUploadView(APIView):
         if was_verified:
             profile.is_verified = False
             update_fields.append('is_verified')
+            # See DoctorProfileWriteSerializer.update for why a credential
+            # edit opts out of the appointment-cancellation cascade that an
+            # admin-initiated unverify still triggers.
+            profile._verification_reset_skip_cascade = True
         profile.save(update_fields=update_fields)
         if was_verified:
             _notify_verification_reset(profile)
