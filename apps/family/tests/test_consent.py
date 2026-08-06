@@ -233,6 +233,104 @@ class AdultConsentNoticeTests(ConsentTestBase):
         self.assertIn('contact_email', res.data['errors'])
 
 
+class SweepDependentConsentNoticesTests(ConsentTestBase):
+    """apps.family.tasks.sweep_dependent_consent_notices — the daily sweep
+    for a dependent who passively crosses 18 with no create/update in
+    between (AdultConsentNoticeTests above only covers the create/edit
+    triggers)."""
+
+    def test_dependent_who_ages_into_18_without_an_edit_gets_notified(self):
+        res = self.client.post(
+            DEPENDENTS_URL,
+            _dependent_payload(
+                relationship='child', date_of_birth=_child_dob(), contact_email='future-adult@test.com',
+            ),
+            format='json',
+        )
+        dependent_id = res.data['id']
+        self.assertIsNone(res.data['consent_notice_sent_at'])
+        mail.outbox.clear()
+
+        # Simulate the birthday passing with no profile edit in between —
+        # a direct DB write, bypassing the serializer entirely, same as
+        # DateOfBirthRequiredTests.test_existing_dependent_without_dob_is_
+        # unaffected_by_unrelated_edit does above for the null-DOB case.
+        Dependent.objects.filter(pk=dependent_id).update(date_of_birth=_adult_dob())
+
+        from apps.family.tasks import sweep_dependent_consent_notices
+        sweep_dependent_consent_notices()
+
+        dependent = Dependent.objects.get(pk=dependent_id)
+        self.assertIsNotNone(dependent.consent_notice_sent_at)
+        self.assertTrue(dependent.consent_token_hash)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['future-adult@test.com'])
+
+    def test_already_notified_adult_dependent_is_not_renotified(self):
+        res = self.client.post(
+            DEPENDENTS_URL,
+            _dependent_payload(
+                relationship='spouse', date_of_birth=_adult_dob(), contact_email='spouse@test.com',
+            ),
+            format='json',
+        )
+        dependent_id = res.data['id']
+        self.assertIsNotNone(res.data['consent_notice_sent_at'])
+        mail.outbox.clear()
+
+        from apps.family.tasks import sweep_dependent_consent_notices
+        sweep_dependent_consent_notices()
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_minor_dependent_is_untouched_by_sweep(self):
+        res = self.client.post(DEPENDENTS_URL, _dependent_payload(date_of_birth=_child_dob()), format='json')
+        dependent_id = res.data['id']
+        mail.outbox.clear()
+
+        from apps.family.tasks import sweep_dependent_consent_notices
+        sweep_dependent_consent_notices()
+
+        dependent = Dependent.objects.get(pk=dependent_id)
+        self.assertIsNone(dependent.consent_notice_sent_at)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_adult_dependent_without_contact_email_is_skipped_without_error(self):
+        # A legacy row a real serializer path could never produce (adult
+        # DOB with no contact_email) — created directly via the ORM, same
+        # as DateOfBirthRequiredTests' null-DOB fixture. The sweep must
+        # skip it, not crash issue_consent_notice against a blank email.
+        Dependent.objects.create(
+            managed_by=self._patient(), first_name='Bob', relationship='spouse',
+            date_of_birth=_adult_dob(),
+        )
+        mail.outbox.clear()
+
+        from apps.family.tasks import sweep_dependent_consent_notices
+        sweep_dependent_consent_notices()
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_inactive_dependent_is_not_notified(self):
+        res = self.client.post(
+            DEPENDENTS_URL,
+            _dependent_payload(
+                relationship='child', date_of_birth=_child_dob(), contact_email='ignored@test.com',
+            ),
+            format='json',
+        )
+        dependent_id = res.data['id']
+        Dependent.objects.filter(pk=dependent_id).update(
+            date_of_birth=_adult_dob(), is_active=False,
+        )
+        mail.outbox.clear()
+
+        from apps.family.tasks import sweep_dependent_consent_notices
+        sweep_dependent_consent_notices()
+
+        self.assertEqual(len(mail.outbox), 0)
+
+
 class DependentConsentRejectViewTests(ConsentTestBase):
     def _create_adult_dependent(self, contact_email='spouse@test.com'):
         res = self.client.post(

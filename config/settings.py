@@ -299,6 +299,13 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.subscriptions.tasks.sweep_subscriptions',
         'schedule': timedelta(hours=1),
     },
+    'sweep-dependent-consent-notices': {
+        'task': 'apps.family.tasks.sweep_dependent_consent_notices',
+        # A birthday-crossing check has no urgency window like the 30-minute
+        # jobs above — once a day is enough, matching
+        # delete-expired-assistant-conversations' cadence.
+        'schedule': timedelta(hours=24),
+    },
 }
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
